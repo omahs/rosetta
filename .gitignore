@@ -1,2 +1,4 @@
-contract/
+contract/*
+!contract/manager.go
+!contract/constants.go
 main

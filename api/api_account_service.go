@@ -13,6 +13,7 @@ import (
 	"context"
 
 	"github.com/celo-org/rosetta/contract"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	eth "github.com/ethereum/go-ethereum/ethclient"
@@ -23,13 +24,15 @@ import (
 // This service should implement the business logic for every endpoint for the AccountApi API.
 // Include any external packages or services that will be required by this service.
 type AccountApiService struct {
-	ethClient *eth.Client
+	ethClient       *eth.Client
+	contractManager *contract.ContractManager
 }
 
 // NewAccountApiService creates a default api service
-func NewAccountApiService(rpcClient *rpc.Client) AccountApiServicer {
+func NewAccountApiService(rpcClient *rpc.Client, contractManager *contract.ContractManager) AccountApiServicer {
 	return &AccountApiService{
-		ethClient: eth.NewClient(rpcClient),
+		ethClient:       eth.NewClient(rpcClient),
+		contractManager: contractManager,
 	}
 }
 
@@ -47,75 +50,60 @@ func (s *AccountApiService) AccountBalance(accountBalanceRequest AccountBalanceR
 	if err != nil {
 		return BuildErrorResponse(1, err), nil
 	}
+	// stableTokenAddr, err := registry.GetAddressForString(&bind.CallOpts{
+	// 	BlockNumber: latestHeader.Number,
+	// 	Context:     ctx,
+	// }, StableTokenRegistryId)
+	// if err != nil {
+	// 	return BuildErrorResponse(6, err), nil
+	// }
 
-	registry, err := contract.NewRegistry(RegistrySmartContractAddress, s.ethClient)
-	if err != nil {
-		return BuildErrorResponse(2, err), nil
-	}
+	// stableToken, err := contract.NewStableToken(stableTokenAddr, s.ethClient)
+	// if err != nil {
+	// 	return BuildErrorResponse(7, err), nil
+	// }
 
-	lockedGoldAddr, err := registry.GetAddressForString(&bind.CallOpts{
-		BlockNumber: latestHeader.Number,
-		Context:     ctx,
-	}, LockedGoldRegistryId)
-	if err != nil {
-		return BuildErrorResponse(3, err), nil
-	}
+	// stableTokenBalance, err := stableToken.BalanceOf(&bind.CallOpts{
+	// 	BlockNumber: latestHeader.Number,
+	// 	Context:     ctx,
+	// }, address)
+	// if err != nil {
+	// 	return BuildErrorResponse(8, err), nil
+	// }
 
-	lockedGold, err := contract.NewLockedGold(lockedGoldAddr, s.ethClient)
-	if err != nil {
-		return BuildErrorResponse(4, err), nil
-	}
-
-	lockedGoldBalance, err := lockedGold.GetAccountTotalLockedGold(&bind.CallOpts{
-		BlockNumber: latestHeader.Number,
-		Context:     ctx,
-	}, address)
-	if err != nil {
-		return BuildErrorResponse(5, err), nil
-	}
-
-	stableTokenAddr, err := registry.GetAddressForString(&bind.CallOpts{
-		BlockNumber: latestHeader.Number,
-		Context:     ctx,
-	}, StableTokenRegistryId)
-	if err != nil {
-		return BuildErrorResponse(6, err), nil
-	}
-
-	stableToken, err := contract.NewStableToken(stableTokenAddr, s.ethClient)
-	if err != nil {
-		return BuildErrorResponse(7, err), nil
-	}
-
-	stableTokenBalance, err := stableToken.BalanceOf(&bind.CallOpts{
+	s.contractManager.RwMutex.RLock()
+	lockedGoldBalance, err := s.contractManager.LockedGold.GetAccountTotalLockedGold(&bind.CallOpts{
 		BlockNumber: latestHeader.Number,
 		Context:     ctx,
 	}, address)
 	if err != nil {
-		return BuildErrorResponse(8, err), nil
+		// TODO: err
 	}
+	s.contractManager.RwMutex.RUnlock()
 
 	response := AccountBalanceResponse{
 		BlockIdentifier: BlockIdentifierFromHeader(latestHeader),
 		Balances: []Balance{
 			Balance{
-				AccountIdentifier: accountBalanceRequest.AccountIdentifier,
+				AccountIdentifier: AccountIdentifier{
+					Address: address.String(),
+				},
 				Amounts: []Amount{
 					Amount{
 						Value:    goldBalance.String(),
 						Currency: CeloGold,
 					},
-					Amount{
-						Value:    stableTokenBalance.String(),
-						Currency: CeloDollar,
-					},
+					// Amount{
+					// 	Value:    stableTokenBalance.String(),
+					// 	Currency: CeloDollar,
+					// },
 				},
 			},
 			Balance{
 				AccountIdentifier: AccountIdentifier{
-					Address: lockedGoldAddr.String(),
+					Address: address.String(),
 					SubAccount: SubAccountIdentifier{
-						SubAccount: accountBalanceRequest.AccountIdentifier.Address,
+						SubAccount: contract.LockedGoldName,
 					},
 				},
 				Amounts: []Amount{

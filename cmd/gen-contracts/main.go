@@ -33,23 +33,21 @@ func main() {
 	validatePathExists(*monorepoPath)
 	validatePathExists(*celoBlockchainPath)
 
-	if pathExists(contractsPath) {
-		if err := os.RemoveAll(contractsPath); err != nil {
-			exitMessage("Error removing "+contractsPath+" directory: %s\n", err)
-		}
-	}
-	if err := os.MkdirAll(contractsPath, os.ModePerm); err != nil {
-		exitMessage("Error creating "+contractsPath+" directory: %s\n", err)
-	}
-
 	abigen := path.Join(*celoBlockchainPath, "build/bin", "abigen")
 
 	for _, contract := range contractsToGenerate {
+		sourceName := strings.ToLower(contract) + ".go"
+		outPath := path.Join(contractsPath, sourceName)
+		if pathExists(outPath) {
+			if err := os.Remove(outPath); err != nil {
+				exitMessage("Error removing"+outPath+": %s\n", err)
+			}
+		}
 		contractTrufflePath := path.Join(*monorepoPath, "packages/protocol/build/contracts/", contract+".json")
 		validatePathExists(contractTrufflePath)
 		build.MustRunCommand(abigen, "--truffle", contractTrufflePath,
 			"--pkg", contractsPath, "--type", contract,
-			"--out", path.Join(contractsPath, strings.ToLower(contract)+".go"))
+			"--out", outPath)
 	}
 }
 

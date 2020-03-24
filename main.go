@@ -14,6 +14,7 @@ import (
 	"net/http"
 
 	api "github.com/celo-org/rosetta/api"
+	"github.com/celo-org/rosetta/contract"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -25,7 +26,12 @@ func main() {
 		log.Fatalf("Can't connect to node, %s", err)
 	}
 
-	AccountApiService := api.NewAccountApiService(rpcClient)
+	contractManager, err := contract.NewContractManager(rpcClient)
+	if err != nil {
+		log.Fatalf("Failed to create contract manager, %s", err)
+	}
+
+	AccountApiService := api.NewAccountApiService(rpcClient, contractManager)
 	AccountApiController := api.NewAccountApiController(AccountApiService)
 
 	BlockApiService := api.NewBlockApiService()
