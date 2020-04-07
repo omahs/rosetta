@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/celo-org/rosetta/api"
+	"github.com/celo-org/rosetta/service/rpc"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -34,9 +34,7 @@ var serveCmd = &cobra.Command{
 	PersistentPreRun: validateDatadir,
 }
 
-var httpPort uint
-var httpAddress string
-var requestTimeout time.Duration
+var rosettaRpcConfig rpc.RosettaServerConfig
 
 type ConfigPaths string
 
@@ -46,21 +44,13 @@ var datadir ConfigPaths
 func init() {
 	rootCmd.AddCommand(serveCmd)
 
-	serveCmd.PersistentFlags().UintVar(&httpPort, "port", 8080, "Listening port for http server")
-	serveCmd.PersistentFlags().StringVar(&httpAddress, "address", "", "Listening address for http server")
-	serveCmd.PersistentFlags().DurationVar(&requestTimeout, "reqTimeout", 25*time.Second, "Timeout when serving a request")
+	serveCmd.PersistentFlags().UintVar(&rosettaRpcConfig.Port, "port", 8080, "Listening port for http server")
+	serveCmd.PersistentFlags().StringVar(&rosettaRpcConfig.Interface, "address", "", "Listening address for http server")
+	serveCmd.PersistentFlags().DurationVar(&rosettaRpcConfig.RequestTimeout, "reqTimeout", 25*time.Second, "Timeout when serving a request")
 
 	serveCmd.PersistentFlags().String("datadir", "", "datadir to use")
 	exitOnError(viper.BindPFlag("datadir", serveCmd.PersistentFlags().Lookup("datadir")))
 	exitOnError(serveCmd.MarkPersistentFlagDirname("datadir"))
-}
-
-func getRosettaServerConfig() *api.RosettaServerConfig {
-	return &api.RosettaServerConfig{
-		Port:           httpPort,
-		Interface:      httpAddress,
-		RequestTimeout: requestTimeout,
-	}
 }
 
 func validateDatadir(cmd *cobra.Command, args []string) {
@@ -88,20 +78,4 @@ func (g ConfigPaths) Datadir() string {
 
 func (g ConfigPaths) GethDatadir() string {
 	return filepath.Join(string(g), "celo")
-}
-
-func (g ConfigPaths) GethInitializedFile() string {
-	return filepath.Join(string(g), ".geth-initialized")
-}
-
-func (g ConfigPaths) GethLogFile() string {
-	return filepath.Join(g.GethDatadir(), "celo.log")
-}
-
-func (g ConfigPaths) GethIpcFile() string {
-	return filepath.Join(g.GethDatadir(), "geth.ipc")
-}
-
-func (g ConfigPaths) GethStaticNodesFile() string {
-	return filepath.Join(g.GethDatadir(), "/Celo/static-nodes.json")
 }

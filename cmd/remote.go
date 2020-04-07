@@ -18,12 +18,12 @@ package cmd
 import (
 	"context"
 
-	"github.com/celo-org/rosetta/api"
 	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client"
 	"github.com/celo-org/rosetta/internal/signals"
+	"github.com/celo-org/rosetta/service"
+	"github.com/celo-org/rosetta/service/rpc"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/spf13/cobra"
 )
 
@@ -53,12 +53,10 @@ func init() {
 
 func runRemoteCmd(cmd *cobra.Command, args []string) {
 
-	rpcClient, err := rpc.Dial(nodeUri)
+	cc, err := client.Dial(nodeUri)
 	if err != nil {
 		log.Crit("Can't connect to node", "err", err)
 	}
-
-	cc := client.NewCeloClient(rpcClient)
 
 	log.Debug("Obtaining chain id")
 	chainId, err := cc.Net.ChainId(context.Background())
@@ -72,11 +70,18 @@ func runRemoteCmd(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("Initializing Rosetta In Remote Mode..", "chainId", chainId, "epochSize", epochSize, "nodeUri", nodeUri)
-	rosettaServer := api.NewRosettaServer(cc, getRosettaServerConfig(), chainParams)
+	rosettaServer := rpc.NewRosettaServer(cc, &rosettaRpcConfig, chainParams)
 
-	go rosettaServer.Start()
-	defer rosettaServer.Stop()
+	srvCtx, stopServices := context.WithCancel(context.Background())
+	defer stopServices()
 
 	gotExitSignal := signals.WatchForExitSignals()
-	<-gotExitSignal
+	go func() {
+		<-gotExitSignal
+		stopServices()
+	}()
+
+	if err := service.RunServices(srvCtx, rosettaServer); err != nil {
+		log.Error("Error running services", "err", err)
+	}
 }
