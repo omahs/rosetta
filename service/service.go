@@ -51,3 +51,36 @@ func RunServices(ctx context.Context, services ...Service) error {
 	wg.Wait()
 	return errors.Error()
 }
+
+type ServiceManager struct {
+	wg             sync.WaitGroup
+	errorCollector ErrorCollector
+	ctx            context.Context
+	stopAll        context.CancelFunc
+}
+
+func NewServiceManager(ctx context.Context) *ServiceManager {
+	ctx, stopAll := context.WithCancel(ctx)
+	return &ServiceManager{
+		ctx:     ctx,
+		stopAll: stopAll,
+	}
+
+}
+
+func (sm *ServiceManager) Add(srv Service) {
+	sm.wg.Add(1)
+	go func() {
+		defer sm.wg.Done()
+		err := srv.Start(sm.ctx)
+		if err != nil {
+			sm.errorCollector.Add(err)
+			sm.stopAll()
+		}
+	}()
+}
+
+func (sm *ServiceManager) Wait() error {
+	sm.wg.Wait()
+	return sm.errorCollector.Error()
+}

@@ -103,7 +103,6 @@ func rosettaServiceFactory(chainParams *celo.ChainParameters, nodeUri string, st
 	return func() (service.Service, error) {
 
 		cc, err := client.Dial(nodeUri)
-
 		if err != nil {
 			return nil, fmt.Errorf("Error on client connection to geth: %w", err)
 		}
