@@ -12,6 +12,7 @@ require (
 	github.com/miguelmota/go-ethereum-hdwallet v0.0.0-20200123000308-a60dcd172b4c
 	github.com/onsi/ginkgo v1.10.2 // indirect
 	github.com/onsi/gomega v1.9.0
+	github.com/prometheus/common v0.6.0
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/viper v1.6.2

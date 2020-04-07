@@ -77,7 +77,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	// 2nd. Process Headers
 	go func() {
 		defer wg.Done()
-		err := BlockProcessor(ctx, headerCh, changeSetsCh, ms.cc)
+		err := BlockProcessor(ctx, headerCh, changeSetsCh, ms.cc, ms.db)
 		if err != nil {
 			errorCollector.Add(err)
 			stopAll()

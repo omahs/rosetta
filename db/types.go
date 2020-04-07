@@ -2,10 +2,13 @@ package db
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+var ErrNotFound = errors.New("db: record not found")
 
 type RosettaDBReader interface {
 	LastPersistedBlock(ctx context.Context) (*big.Int, error)
