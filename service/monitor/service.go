@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"context"
-	"math/big"
 	"sync"
 
 	"github.com/celo-org/rosetta/celo/client"
@@ -13,6 +12,14 @@ import (
 type monitorService struct {
 	running service.RunningLock
 	cc      *client.CeloClient
+	store   *CeloStore
+}
+
+func NewMonitorService(cc *client.CeloClient, store *CeloStore) *monitorService {
+	return &monitorService{
+		cc:    cc,
+		store: store,
+	}
 }
 
 // Name retrieves the name of the service, that will be used
@@ -34,8 +41,10 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	}
 	defer ms.running.Disable()
 
-	// TODO implement (obtain start block from DB)
-	var startBlock *big.Int
+	startBlock, err := ms.store.LastPersistedBlock(ctx)
+	if err != nil {
+		return err
+	}
 
 	ctx, stopAll := context.WithCancel(ctx)
 
@@ -70,7 +79,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	// 3rd. Store Changes into DB
 	go func() {
 		defer wg.Done()
-		err := ChangeSetStorer(ctx, changeSetsCh)
+		err := ms.store.ProcessChanges(ctx, changeSetsCh)
 		if err != nil {
 			errorCollector.Add(err)
 			stopAll()
