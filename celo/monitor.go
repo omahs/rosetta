@@ -21,6 +21,7 @@ type Monitor struct {
 	startBlock *big.Int
 	stop       <-chan struct{}
 	db         *DB
+	logger     log.Logger
 }
 
 type BlockResult struct {
@@ -29,6 +30,7 @@ type BlockResult struct {
 }
 
 func NewMonitor(cc *client.CeloClient, startBlock *big.Int) (*Monitor, error) {
+	logger := log.New("srv", "monitor")
 
 	if startBlock == nil {
 		startBlock = big.NewInt(0)
@@ -57,6 +59,7 @@ func NewMonitor(cc *client.CeloClient, startBlock *big.Int) (*Monitor, error) {
 		startBlock: startBlock,
 		stop:       stop,
 		db:         db,
+		logger:     logger,
 	}, nil
 }
 

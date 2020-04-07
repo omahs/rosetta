@@ -75,13 +75,15 @@ func (ds *delayedService) Start(ctx context.Context) error {
 	return ds.srv.Start(ctx)
 }
 
+type ServieFactory func() (Service, error)
+
 type lazyService struct {
-	factory func() Service
+	factory ServieFactory
 	srv     Service
 	name    string
 }
 
-func LazyService(name string, factory func() Service) *lazyService {
+func LazyService(name string, factory func() (Service, error)) *lazyService {
 	return &lazyService{
 		name:    name,
 		factory: factory,
@@ -108,7 +110,12 @@ func (ls *lazyService) Start(ctx context.Context) error {
 		return ErrAlreadyRunning
 	}
 
-	ls.srv = ls.factory()
+	srv, err := ls.factory()
+	if err != nil {
+		return err
+	}
+
+	ls.srv = srv
 
 	return ls.srv.Start(ctx)
 }
