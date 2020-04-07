@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/celo-org/rosetta/celo/client"
+	"github.com/celo-org/rosetta/db"
 	"github.com/celo-org/rosetta/service"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -14,16 +15,16 @@ import (
 type monitorService struct {
 	running service.RunningLock
 	cc      *client.CeloClient
-	store   *CeloStore
+	db      db.RosettaDB
 	logger  log.Logger
 }
 
 const srvName = "celo-monitor"
 
-func NewMonitorService(cc *client.CeloClient, store *CeloStore) *monitorService {
+func NewMonitorService(cc *client.CeloClient, db db.RosettaDB) *monitorService {
 	return &monitorService{
 		cc:     cc,
-		store:  store,
+		db:     db,
 		logger: log.New("srv", srvName),
 	}
 }
@@ -47,7 +48,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	}
 	defer ms.running.Disable()
 
-	startBlock, err := ms.store.LastPersistedBlock(ctx)
+	startBlock, err := ms.db.LastPersistedBlock(ctx)
 	if err != nil {
 		return err
 	}
@@ -59,7 +60,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	var errorCollector service.ErrorCollector
 
 	headerCh := make(chan *types.Header)
-	changeSetsCh := make(chan *BlockChangeSet)
+	changeSetsCh := make(chan *db.BlockChangeSet)
 
 	wg.Add(3)
 
@@ -86,7 +87,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	// 3rd. Store Changes into DB
 	go func() {
 		defer wg.Done()
-		err := ms.store.ProcessChanges(ctx, changeSetsCh)
+		err := ProcessChanges(ctx, changeSetsCh, ms.db)
 		if err != nil {
 			errorCollector.Add(err)
 			stopAll()

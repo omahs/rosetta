@@ -9,6 +9,7 @@ import (
 	"github.com/celo-org/rosetta/api"
 	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client"
+	"github.com/celo-org/rosetta/db"
 	"github.com/celo-org/rosetta/service"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/felixge/httpsnoop"
@@ -27,6 +28,7 @@ func (hs *RosettaServerConfig) ListenAddress() string {
 
 type rosettaServer struct {
 	cc          *client.CeloClient
+	db          db.RosettaDB
 	cfg         *RosettaServerConfig
 	chainParams *celo.ChainParameters
 
@@ -34,7 +36,7 @@ type rosettaServer struct {
 	server  *http.Server
 }
 
-func NewRosettaServer(cc *client.CeloClient, cfg *RosettaServerConfig, chainParams *celo.ChainParameters) *rosettaServer {
+func NewRosettaServer(cc *client.CeloClient, cfg *RosettaServerConfig, chainParams *celo.ChainParameters, _db db.RosettaDB) *rosettaServer {
 	var mainHandler http.Handler
 	mainHandler = createRouter(cc, chainParams)
 	mainHandler = requestLogHandler(mainHandler)
@@ -51,6 +53,7 @@ func NewRosettaServer(cc *client.CeloClient, cfg *RosettaServerConfig, chainPara
 	return &rosettaServer{
 		cc:          cc,
 		cfg:         cfg,
+		db:          _db,
 		server:      server,
 		chainParams: chainParams,
 	}

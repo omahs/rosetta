@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/celo-org/rosetta/celo/client"
+	"github.com/celo-org/rosetta/db"
 	"github.com/celo-org/rosetta/service"
 	"github.com/celo-org/rosetta/service/geth"
 	mservice "github.com/celo-org/rosetta/service/monitor"
@@ -36,7 +37,7 @@ func runMonitorWithGeth(ctx context.Context) error {
 	nodeUri := gethSrv.IpcFilePath()
 	log.Debug("celo nodes ipc file", "filepath", nodeUri)
 
-	celoStore, err := mservice.NewCeloStore()
+	celoStore, err := db.NewSQLDB()
 	if err != nil {
 		log.Error("Error opening CeloStore", "err", err)
 		return err

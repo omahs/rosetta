@@ -24,6 +24,7 @@ import (
 
 	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client"
+	"github.com/celo-org/rosetta/db"
 	"github.com/celo-org/rosetta/internal/fileutils"
 	"github.com/celo-org/rosetta/internal/signals"
 	"github.com/celo-org/rosetta/service"
@@ -99,7 +100,7 @@ func getDatadir(cmd *cobra.Command) string {
 	return absDatadir
 }
 
-func rosettaServiceFactory(chainParams *celo.ChainParameters, nodeUri string, store *monitor.CeloStore) service.ServieFactory {
+func rosettaServiceFactory(chainParams *celo.ChainParameters, nodeUri string, db db.RosettaDB) service.ServieFactory {
 	return func() (service.Service, error) {
 
 		cc, err := client.Dial(nodeUri)
@@ -107,8 +108,8 @@ func rosettaServiceFactory(chainParams *celo.ChainParameters, nodeUri string, st
 			return nil, fmt.Errorf("Error on client connection to geth: %w", err)
 		}
 
-		rosettaServerSrv := rpc.NewRosettaServer(cc, &rosettaRpcConfig, chainParams)
-		monitorSrv := monitor.NewMonitorService(cc, store)
+		rosettaServerSrv := rpc.NewRosettaServer(cc, &rosettaRpcConfig, chainParams, db)
+		monitorSrv := monitor.NewMonitorService(cc, db)
 
 		return service.Group(rosettaServerSrv, monitorSrv), nil
 	}
@@ -142,7 +143,7 @@ func runRunCmd(cmd *cobra.Command, args []string) {
 	nodeUri := gethSrv.IpcFilePath()
 	log.Debug("celo nodes ipc file", "filepath", nodeUri)
 
-	celoStore, err := monitor.NewCeloStore()
+	celoStore, err := db.NewSQLDB()
 	if err != nil {
 		log.Error("Error opening CeloStore", "err", err)
 		os.Exit(1)

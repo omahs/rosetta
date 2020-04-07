@@ -2,54 +2,15 @@ package monitor
 
 import (
 	"context"
-	"math/big"
 
-	"github.com/celo-org/rosetta/internal/utils"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/celo-org/rosetta/db"
 )
 
-type CeloStore struct {
-}
-
-func NewCeloStore() (*CeloStore, error) {
-	// TODO initialize DB connection
-
-	return &CeloStore{}, nil
-}
-
-func (cs *CeloStore) LastPersistedBlock(ctx context.Context) (*big.Int, error) {
-	// TODO implement
-	return nil, utils.ErrNotImplemented
-}
-
-func (cs *CeloStore) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
-	// TODO implement
-	return nil, utils.ErrNotImplemented
-}
-
-func (cs *CeloStore) RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error) {
-	// TODO implement
-	return common.ZeroAddress, utils.ErrNotImplemented
-}
-
-func (cs *CeloStore) RegistryAddressesOn(ctx context.Context, block *big.Int, txIndex uint, contractName ...string) ([]common.Address, error) {
-	// TODO implement
-	return []common.Address{}, utils.ErrNotImplemented
-}
-
-func (cs *CeloStore) ProcessChanges(ctx context.Context, changes <-chan *BlockChangeSet) error {
-
+func ProcessChanges(ctx context.Context, changes <-chan *db.BlockChangeSet, dbWriter db.RosettaDBWriter) error {
 	for changeSet := range changes {
-
-		_ = changeSet
-		// TODO implement
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		// case changes <- &bcs:
-		default:
+		if err := dbWriter.ApplyChanges(ctx, changeSet); err != nil {
+			return err
 		}
 	}
-
 	return nil
 }
