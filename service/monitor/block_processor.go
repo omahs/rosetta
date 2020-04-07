@@ -28,6 +28,7 @@ func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes c
 			blockNumber: header.Number,
 		}
 
+		// TODO implement
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

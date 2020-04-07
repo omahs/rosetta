@@ -39,5 +39,17 @@ func (cs *CeloStore) RegistryAddressesOn(ctx context.Context, block *big.Int, tx
 
 func (cs *CeloStore) ProcessChanges(ctx context.Context, changes <-chan *BlockChangeSet) error {
 
+	for changeSet := range changes {
+
+		_ = changeSet
+		// TODO implement
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		// case changes <- &bcs:
+		default:
+		}
+	}
+
 	return nil
 }
