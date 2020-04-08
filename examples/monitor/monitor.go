@@ -18,6 +18,7 @@ var (
 	gethBinary  = "../bin/rc0/geth"
 	genesis     = "./envs/rc0/genesis.json"
 	datadir     = "./envs/rc0"
+	sqlitepath  = "./envs/rc0/rosetta.db"
 	staticNodes = []string{
 		"enode://33ac194052ccd10ce54101c8340dbbe7831de02a3e7dcbca7fd35832ff8c53a72fd75e57ce8c8e73a0ace650dc2c2ec1e36f0440e904bc20a3cf5927f2323e85@34.83.199.225:30303",
 	}
@@ -37,7 +38,7 @@ func runMonitorWithGeth(ctx context.Context) error {
 	nodeUri := gethSrv.IpcFilePath()
 	log.Debug("celo nodes ipc file", "filepath", nodeUri)
 
-	celoStore, err := db.NewSQLDB()
+	celoStore, err := db.NewSqliteDb(sqlitepath)
 	if err != nil {
 		log.Error("Error opening CeloStore", "err", err)
 		return err

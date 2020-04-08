@@ -4,14 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"math/big"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type sqlRosettaDb struct {
+type rosettaSqlDb struct {
 	db *sql.DB
 }
 
@@ -25,27 +24,30 @@ const (
 	setRegisteredAddressOnStmt = "insert into registeredAddresses (contract, fromBlock, fromTx, address) values (?, ?, ?, ?)"
 )
 
-func NewSQLDB() (*sqlRosettaDb, error) {
-	os.Remove("./monitor.db")
-	db, err := sql.Open("sqlite3", "./monitor.db")
+func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
+	db, err := sql.Open("sqlite3", dbpath)
 	if err != nil {
 		return nil, err
 	}
+
 	if _, err := db.Exec("CREATE TABLE registryAddresses (contract chars(32), fromBlock bigint, fromTx int, address chars(40))"); err != nil {
 		return nil, err
 	}
+
 	if _, err := db.Exec("CREATE TABLE gasPriceMinimum (fromBlock bigint, val bigint)"); err != nil {
 		return nil, err
 	}
+
 	if _, err := db.Exec("CREATE TABLE stats (lastPersistedBlock bigint)"); err != nil { //TODO: limit entries to 1?
 		return nil, err
 	}
-	return &sqlRosettaDb{
+
+	return &rosettaSqlDb{
 		db: db,
 	}, nil
 }
 
-func (cs *sqlRosettaDb) LastPersistedBlock(ctx context.Context) (*big.Int, error) {
+func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error) {
 	rows, err := cs.db.Query("select lastPersistedBlock from stats")
 	if err != nil {
 		return nil, err
@@ -65,7 +67,7 @@ func (cs *sqlRosettaDb) LastPersistedBlock(ctx context.Context) (*big.Int, error
 	return block, nil
 }
 
-func (cs *sqlRosettaDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
+func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
 	rows, err := cs.db.Query("select val from gasPriceMinimum where fromBlock <= ? order by desc fromblock limit 1", block)
 	if err != nil {
 		return nil, err
@@ -85,7 +87,7 @@ func (cs *sqlRosettaDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (
 	return value, nil
 }
 
-func (cs *sqlRosettaDb) RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error) {
+func (cs *rosettaSqlDb) RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error) {
 	rows, err := cs.db.Query("select address from registryAddresses where id == ? and fromBlock <= ? and fromTx <= ? order by desc fromblock, fromTx limit 1", contractName, block, txIndex)
 	if err != nil {
 		return common.ZeroAddress, err
@@ -105,7 +107,7 @@ func (cs *sqlRosettaDb) RegistryAddressOn(ctx context.Context, block *big.Int, t
 	return address, nil
 }
 
-func (cs *sqlRosettaDb) RegistryAddressesOn(ctx context.Context, block *big.Int, txIndex uint, contractNames ...string) (map[string]common.Address, error) {
+func (cs *rosettaSqlDb) RegistryAddressesOn(ctx context.Context, block *big.Int, txIndex uint, contractNames ...string) (map[string]common.Address, error) {
 	addresses := make(map[string]common.Address)
 	// TODO: Could this be done more efficiently, perhaps concurrently?
 	for _, name := range contractNames {
@@ -118,7 +120,7 @@ func (cs *sqlRosettaDb) RegistryAddressesOn(ctx context.Context, block *big.Int,
 	return addresses, nil
 }
 
-func (cs *sqlRosettaDb) ApplyChanges(ctx context.Context, changeSet *BlockChangeSet) error {
+func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChangeSet) error {
 
 	//TODO: check if this is the right isolation level, or should keep default
 	tx, err := cs.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -155,7 +157,7 @@ func (cs *sqlRosettaDb) ApplyChanges(ctx context.Context, changeSet *BlockChange
 	return nil
 }
 
-func (cs *sqlRosettaDb) setLastPersistedBlock(block *big.Int) error {
+func (cs *rosettaSqlDb) setLastPersistedBlock(block *big.Int) error {
 	_, err := cs.db.Exec(setLastPersistedBlockStmt, block, block)
 	if err != nil {
 		return err
@@ -163,7 +165,7 @@ func (cs *sqlRosettaDb) setLastPersistedBlock(block *big.Int) error {
 	return nil
 }
 
-func (cs *sqlRosettaDb) setGasPriceMinimumOn(block, gasPriceMinimum *big.Int) error {
+func (cs *rosettaSqlDb) setGasPriceMinimumOn(block, gasPriceMinimum *big.Int) error {
 	_, err := cs.db.Exec(setGasPriceMinimumOnStmt, block, gasPriceMinimum)
 	if err != nil {
 		return err
@@ -171,7 +173,7 @@ func (cs *sqlRosettaDb) setGasPriceMinimumOn(block, gasPriceMinimum *big.Int) er
 	return nil
 }
 
-func (cs *sqlRosettaDb) setRegisteredAddressOn(contractName string, blockNumber *big.Int, txIndex uint, address common.Address) error {
+func (cs *rosettaSqlDb) setRegisteredAddressOn(contractName string, blockNumber *big.Int, txIndex uint, address common.Address) error {
 	_, err := cs.db.Exec(setRegisteredAddressOnStmt, contractName, blockNumber, txIndex, address)
 	if err != nil {
 		return err

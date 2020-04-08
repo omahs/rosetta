@@ -118,6 +118,7 @@ func rosettaServiceFactory(chainParams *celo.ChainParameters, nodeUri string, db
 func runRunCmd(cmd *cobra.Command, args []string) {
 	datadir := getDatadir(cmd)
 	gethDataDir := filepath.Join(datadir, "celo")
+	sqlitePath := filepath.Join(datadir, "rosetta.db")
 
 	exitOnMissingConfig(cmd, "geth")
 	exitOnMissingConfig(cmd, "genesis")
@@ -143,7 +144,7 @@ func runRunCmd(cmd *cobra.Command, args []string) {
 	nodeUri := gethSrv.IpcFilePath()
 	log.Debug("celo nodes ipc file", "filepath", nodeUri)
 
-	celoStore, err := db.NewSQLDB()
+	celoStore, err := db.NewSqliteDb(sqlitePath)
 	if err != nil {
 		log.Error("Error opening CeloStore", "err", err)
 		os.Exit(1)
