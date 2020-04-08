@@ -15,6 +15,8 @@ import (
 
 	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client"
+	"github.com/celo-org/rosetta/db"
+	"github.com/celo-org/rosetta/tracer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -24,13 +26,15 @@ import (
 // Include any external packages or services that will be required by this service.
 type BlockApiService struct {
 	celoClient  *client.CeloClient
+	db          db.RosettaDBReader
 	chainParams *celo.ChainParameters
 }
 
 // NewBlockApiService creates a default api service
-func NewBlockApiService(celoClient *client.CeloClient, cp *celo.ChainParameters) BlockApiServicer {
+func NewBlockApiService(celoClient *client.CeloClient, db db.RosettaDBReader, cp *celo.ChainParameters) BlockApiServicer {
 	return &BlockApiService{
 		celoClient:  celoClient,
+		db:          db,
 		chainParams: cp,
 	}
 }
@@ -119,7 +123,7 @@ func (s *BlockApiService) BlockTransaction(ctx context.Context, request BlockTra
 	var operations []Operation
 	// Check If it's block transaction (imaginary transaction)
 	if s.chainParams.IsLastBlockOfEpoch(blockHeader.Number.Uint64()) && txHash == blockHeader.Hash() {
-		rewards, err := celo.ComputeEpochRewards(ctx, s.celoClient, &blockHeader.Header)
+		rewards, err := tracer.ComputeEpochRewards(ctx, s.celoClient, &blockHeader.Header)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +145,7 @@ func (s *BlockApiService) BlockTransaction(ctx context.Context, request BlockTra
 			return nil, ErrRpcError("TransactionReceipt", err)
 		}
 
-		txTracer := celo.NewTxTracer(ctx, s.celoClient, &blockHeader.Header, tx, receipt)
+		txTracer := tracer.NewTxTracer(ctx, s.celoClient, s.db, &blockHeader.Header, tx, receipt)
 
 		gasDetails, err := txTracer.GasDetail()
 		if err != nil {

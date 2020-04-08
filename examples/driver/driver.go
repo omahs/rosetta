@@ -7,13 +7,12 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"time"
 
-	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client"
 	"github.com/celo-org/rosetta/celo/contract"
 	"github.com/celo-org/rosetta/celo/wrapper"
 	"github.com/celo-org/rosetta/internal/config"
+	"github.com/celo-org/rosetta/tracer"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -54,7 +53,6 @@ func main() {
 	// DriverEpochRewards()
 	// DriverEpochRewards2()
 	// DriverSubscribe()
-	DriverMonitor()
 }
 
 func PanicOnErr(err error) {
@@ -70,7 +68,7 @@ func DriverEpochRewards2() {
 	header, err := cc.Eth.HeaderByNumber(ctx, blockNumber)
 	PanicOnErr(err)
 
-	rewards, err := celo.ComputeEpochRewards(ctx, cc, header)
+	rewards, err := tracer.ComputeEpochRewards(ctx, cc, header)
 	PanicOnErr(err)
 
 	for add, value := range rewards {
@@ -95,18 +93,6 @@ func DriverEpochRewards() {
 
 		}
 	}
-}
-
-func DriverMonitor() {
-	cc := CeloClientWithUri("./envs/rc0/celo/geth.ipc")
-
-	monitor, err := celo.NewMonitor(cc, big.NewInt(200000))
-	//monitor, err := celo.NewMonitor(cc, big.NewInt(0))
-	PanicOnErr(err)
-
-	pp.Print(monitor)
-
-	time.Sleep(5000 * time.Second)
 }
 
 type LogParser interface {
@@ -228,9 +214,10 @@ func TxContextDriver() {
 	receipt, err := cc.Eth.TransactionReceipt(ctx, tx.Hash())
 	PanicOnErr(err)
 
-	txTracer := celo.NewTxTracer(
+	txTracer := tracer.NewTxTracer(
 		ctx,
 		cc,
+		nil,
 		header,
 		tx,
 		receipt,

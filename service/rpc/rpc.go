@@ -28,7 +28,6 @@ func (hs *RosettaServerConfig) ListenAddress() string {
 
 type rosettaServer struct {
 	cc          *client.CeloClient
-	db          db.RosettaDB
 	cfg         *RosettaServerConfig
 	chainParams *celo.ChainParameters
 
@@ -38,7 +37,7 @@ type rosettaServer struct {
 
 func NewRosettaServer(cc *client.CeloClient, cfg *RosettaServerConfig, chainParams *celo.ChainParameters, _db db.RosettaDB) *rosettaServer {
 	var mainHandler http.Handler
-	mainHandler = createRouter(cc, chainParams)
+	mainHandler = createRouter(cc, _db, chainParams)
 	mainHandler = requestLogHandler(mainHandler)
 	mainHandler = http.TimeoutHandler(mainHandler, cfg.RequestTimeout, "Request Timed out")
 
@@ -53,7 +52,6 @@ func NewRosettaServer(cc *client.CeloClient, cfg *RosettaServerConfig, chainPara
 	return &rosettaServer{
 		cc:          cc,
 		cfg:         cfg,
-		db:          _db,
 		server:      server,
 		chainParams: chainParams,
 	}
@@ -95,11 +93,11 @@ func requestLogHandler(handler http.Handler) http.Handler {
 	})
 }
 
-func createRouter(celoClient *client.CeloClient, chainParams *celo.ChainParameters) *mux.Router {
+func createRouter(celoClient *client.CeloClient, _db db.RosettaDBReader, chainParams *celo.ChainParameters) *mux.Router {
 	AccountApiService := api.NewAccountApiService(celoClient, chainParams)
 	AccountApiController := api.NewAccountApiController(AccountApiService)
 
-	BlockApiService := api.NewBlockApiService(celoClient, chainParams)
+	BlockApiService := api.NewBlockApiService(celoClient, _db, chainParams)
 	BlockApiController := api.NewBlockApiController(BlockApiService)
 
 	ConstructionApiService := api.NewConstructionApiService(celoClient, chainParams)

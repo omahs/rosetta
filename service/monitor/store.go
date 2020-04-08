@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"github.com/celo-org/rosetta/db"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-func ProcessChanges(ctx context.Context, changes <-chan *db.BlockChangeSet, dbWriter db.RosettaDBWriter) error {
+func ProcessChanges(ctx context.Context, changes <-chan *db.BlockChangeSet, dbWriter db.RosettaDBWriter, logger log.Logger) error {
 	for changeSet := range changes {
+		logger.Info("Storing block changes", "block", changeSet.BlockNumber, "registryUpdates", len(changeSet.RegistryChanges))
 		if err := dbWriter.ApplyChanges(ctx, changeSet); err != nil {
 			return err
 		}

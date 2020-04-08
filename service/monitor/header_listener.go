@@ -6,24 +6,28 @@ import (
 
 	"github.com/celo-org/rosetta/celo/client"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/k0kubun/pp"
 )
 
-func HeaderListener(ctx context.Context, results chan<- *types.Header, cc *client.CeloClient, startBlock *big.Int) error {
+func HeaderListener(ctx context.Context, results chan<- *types.Header, cc *client.CeloClient, logger log.Logger, startBlock *big.Int) error {
 
 	lastBlock, err := lastNodeBlockNumber(ctx, cc)
 	if err != nil {
 		return err
 	}
 
-	if err = fetchHeaderRange(ctx, results, cc, startBlock, lastBlock); err != nil {
+	logger.Debug("Fetching old block", "start", startBlock, "end", lastBlock)
+	if err = fetchHeaderRange(ctx, results, cc, logger, startBlock, lastBlock); err != nil {
 		return err
 	}
 
 	return newHeadersSubscriber(ctx, results, cc)
 }
 
-func fetchHeaderRange(ctx context.Context, results chan<- *types.Header, cc *client.CeloClient, startBlock, endBlock *big.Int) error {
+func fetchHeaderRange(ctx context.Context, results chan<- *types.Header, cc *client.CeloClient, logger log.Logger, startBlock, endBlock *big.Int) error {
 	for i := startBlock; i.Cmp(endBlock) < 0; i.Add(i, big.NewInt(1)) {
+		logger.Debug("Fetching bloc", "block", i)
 		h, err := cc.Eth.HeaderByNumber(ctx, i)
 		if err != nil {
 			return err
@@ -59,5 +63,7 @@ func lastNodeBlockNumber(ctx context.Context, cc *client.CeloClient) (*big.Int, 
 	if err != nil {
 		return nil, err
 	}
+	pp.Println(latest.Number.String(), latest.Hash().Hex(), latest.ParentHash.Hex())
+	pp.Print(latest)
 	return latest.Number, nil
 }

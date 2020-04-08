@@ -1,4 +1,4 @@
-package celo
+package tracer
 
 import (
 	"context"
@@ -7,12 +7,10 @@ import (
 
 	"github.com/celo-org/rosetta/celo/client"
 	"github.com/celo-org/rosetta/celo/contract"
-	"github.com/celo-org/rosetta/celo/wrapper"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/celo-org/rosetta/db"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 type TxTracer struct {
@@ -21,6 +19,7 @@ type TxTracer struct {
 	receipt     *types.Receipt
 
 	celoClient *client.CeloClient
+	db         db.RosettaDBReader
 	ctx        context.Context
 	logger     log.Logger
 }
@@ -28,6 +27,7 @@ type TxTracer struct {
 func NewTxTracer(
 	ctx context.Context,
 	celoClient *client.CeloClient,
+	db db.RosettaDBReader,
 	blockHeader *types.Header,
 	tx *types.Transaction,
 	receipt *types.Receipt,
@@ -35,6 +35,7 @@ func NewTxTracer(
 	logger := log.New("context", "TxTracer", "txHash", tx.Hash().Hex(), "txIndex", receipt.TransactionIndex, "blockHash", blockHeader.Hash().Hex(), "blockNumber", blockHeader.Number)
 	return &TxTracer{
 		celoClient:  celoClient,
+		db:          db,
 		blockHeader: blockHeader,
 		tx:          tx,
 		receipt:     receipt,
@@ -43,80 +44,20 @@ func NewTxTracer(
 	}
 }
 
-func (tc *TxTracer) ObtainRegistryAddresses(identifiers ...[32]byte) (map[[32]byte]common.Address, error) {
-	addresses := make(map[[32]byte]common.Address)
-	registry, err := wrapper.NewRegistry(tc.celoClient)
-	if err != nil {
-		return addresses, err
-	}
-
-	// Check the Address on the previous block
-	callOpts := &bind.CallOpts{
-		BlockNumber: new(big.Int).Sub(tc.blockHeader.Number, big.NewInt(1)),
-		Context:     tc.ctx,
-	}
-
-	for _, identifier := range identifiers {
-		address, err := registry.GetAddressFor(callOpts, identifier)
-		if err == client.ErrContractNotDeployed {
-			// Ignore this error. Attempt to obtain others
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-		addresses[identifier] = address
-	}
-
-	// Check if address changed between last block and previous transaction
-	// on the same block
-	updates, err := registry.GetUpdatesOnBlock(tc.ctx, tc.blockHeader.Number.Uint64(), &tc.receipt.TransactionIndex, identifiers)
-	if err != nil {
-		return nil, err
-	}
-	for id, address := range updates {
-		addresses[id] = address
-	}
-
-	return addresses, nil
-}
-
-func (tc *TxTracer) GasPriceMinimum(gpmAddress common.Address) (*big.Int, error) {
-	gpm, err := contract.NewGasPriceMinimum(gpmAddress, tc.celoClient.Eth)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check the price on the previous block on the previous block
-	callOpts := &bind.CallOpts{
-		BlockNumber: new(big.Int).Sub(tc.blockHeader.Number, big.NewInt(1)),
-		Context:     tc.ctx,
-	}
-	gasPrice, err := gpm.GetGasPriceMinimum(callOpts, common.ZeroAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	// GasPriceMinimun is updated at the end of each block
-	// So no need to check previuos tx within the same block
-
-	return gasPrice, nil
-}
-
 func (tc *TxTracer) GasDetail() (map[common.Address]*big.Int, error) {
 	balanceChanges := make(map[common.Address]*big.Int)
 
-	registryAddresses, err := tc.ObtainRegistryAddresses(params.GasPriceMinimumRegistryId, params.GovernanceRegistryId)
-	if err != nil {
+	governanceAddress, err := tc.db.RegistryAddressOn(tc.ctx, tc.blockHeader.Number, tc.receipt.TransactionIndex, "Governance")
+	if err == db.ErrNotFound {
+		governanceAddress = common.ZeroAddress
+	} else if err != nil {
 		return nil, err
 	}
 
-	gasPriceMinimum := big.NewInt(0) // Fallback gas price minimum
-	if gpmAddress, ok := registryAddresses[params.GasPriceMinimumRegistryId]; ok {
-		gasPriceMinimum, err = tc.GasPriceMinimum(gpmAddress)
-		// TODO - What happens when there's no gasPrice Minimun
-		if err != nil {
-			fmt.Println("Failed go get GasPriceMinum")
-		}
+	// TODO - What happens when there's no gasPrice Minimun
+	gasPriceMinimum, err := tc.db.GasPriceMinimunOn(tc.ctx, tc.blockHeader.Number)
+	if err != nil {
+		return nil, err
 	}
 
 	gasUsed := new(big.Int).SetUint64(tc.receipt.GasUsed)
@@ -128,7 +69,7 @@ func (tc *TxTracer) GasDetail() (map[common.Address]*big.Int, error) {
 	// The "tip" goes to the coinbase address
 	balanceChanges[tc.blockHeader.Coinbase] = new(big.Int).Sub(totalTxFee, baseTxFee)
 
-	if governanceAddress, ok := registryAddresses[params.GovernanceRegistryId]; ok {
+	if governanceAddress != common.ZeroAddress {
 		// The baseTxFee goes to the community fund
 		balanceChanges[governanceAddress] = baseTxFee
 	} else {
@@ -179,11 +120,13 @@ func (tc *TxTracer) TransferDetail() ([]Transfer, error) {
 }
 
 func (tc *TxTracer) LockedGoldTransferDetail() ([]Transfer, error) {
-	registryAddresses, err := tc.ObtainRegistryAddresses(params.LockedGoldRegistryId, params.GovernanceRegistryId)
+
+	registryAddresses, err := tc.db.RegistryAddressesOn(tc.ctx, tc.blockHeader.Number, tc.receipt.TransactionIndex, "Governance", "LockedGold")
 	if err != nil {
 		return nil, err
 	}
-	lockedGoldAddr, ok := registryAddresses[params.LockedGoldRegistryId]
+
+	lockedGoldAddr, ok := registryAddresses["LockedGold"]
 
 	// TODO deal with Error
 
@@ -209,7 +152,7 @@ func (tc *TxTracer) LockedGoldTransferDetail() ([]Transfer, error) {
 
 		switch eventName {
 		case "AccountSlashed":
-			governanceAddr, ok := registryAddresses[params.GovernanceRegistryId]
+			governanceAddr, ok := registryAddresses["Govenance"]
 			if !ok {
 				return nil, fmt.Errorf("Can't slash before governance is deployed")
 			}

@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client"
 	"github.com/celo-org/rosetta/internal/config"
+	"github.com/celo-org/rosetta/tracer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -62,9 +62,10 @@ func main() {
 	totalCost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), tx.GasPrice())
 	totalCost.Add(totalCost, tx.Value())
 	log.Info("Total Cost", "cost", totalCost)
-	txTracer := celo.NewTxTracer(
+	txTracer := tracer.NewTxTracer(
 		ctx,
 		cc,
+		nil, // TODO FIX
 		header,
 		tx,
 		receipt,

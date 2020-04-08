@@ -1,3 +1,3 @@
 package db
 
-var _ RosettaDB = (*sqlRosettaDb)(nil)
+var _ RosettaDB = (*rosettaSqlDb)(nil)

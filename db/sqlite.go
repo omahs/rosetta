@@ -60,11 +60,14 @@ func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error
 			return nil, err
 		}
 		log.Info("Last Persisted Block Found", "block", block.Uint64())
-	} else {
-		return nil, rows.Err()
+		return block, nil
 	}
 
-	return block, nil
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return big.NewInt(0), nil
+
 }
 
 func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
@@ -83,6 +86,8 @@ func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (
 	} else {
 		return nil, rows.Err()
 	}
+
+	// TODO if not present => Default to Zero
 
 	return value, nil
 }
@@ -112,7 +117,9 @@ func (cs *rosettaSqlDb) RegistryAddressesOn(ctx context.Context, block *big.Int,
 	// TODO: Could this be done more efficiently, perhaps concurrently?
 	for _, name := range contractNames {
 		address, err := cs.RegistryAddressOn(ctx, block, txIndex, name)
-		if err != nil {
+		if err == ErrNotFound {
+			continue
+		} else if err != nil {
 			return nil, err
 		}
 		addresses[name] = address

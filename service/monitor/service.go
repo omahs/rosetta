@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"math/big"
 
 	"sync"
 
@@ -52,6 +53,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	startBlock.Add(startBlock, big.NewInt(1))
 
 	ms.logger.Info("Resuming operation from last persisted  block", "block", startBlock)
 	ctx, stopAll := context.WithCancel(ctx)
@@ -67,7 +69,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	// 1st. Listen ot Header
 	go func() {
 		defer wg.Done()
-		err := HeaderListener(ctx, headerCh, ms.cc, startBlock)
+		err := HeaderListener(ctx, headerCh, ms.cc, ms.logger, startBlock)
 		if err != nil {
 			errorCollector.Add(err)
 			stopAll()
@@ -87,7 +89,7 @@ func (ms *monitorService) Start(ctx context.Context) error {
 	// 3rd. Store Changes into DB
 	go func() {
 		defer wg.Done()
-		err := ProcessChanges(ctx, changeSetsCh, ms.db)
+		err := ProcessChanges(ctx, changeSetsCh, ms.db, ms.logger)
 		if err != nil {
 			errorCollector.Add(err)
 			stopAll()

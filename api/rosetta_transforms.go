@@ -3,8 +3,8 @@ package api
 import (
 	"math/big"
 
-	"github.com/celo-org/rosetta/celo"
 	"github.com/celo-org/rosetta/celo/client/txpool"
+	"github.com/celo-org/rosetta/tracer"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -141,7 +141,7 @@ func GasDetailsToOperations(gasDetails map[common.Address]*big.Int) []Operation 
 	return operations
 }
 
-func TransferToOperations(baseIndex int64, transfer *celo.Transfer) []Operation {
+func TransferToOperations(baseIndex int64, transfer *tracer.Transfer) []Operation {
 	return []Operation{
 		Operation{
 			OperationIdentifier: NewOperationIdentifier(baseIndex),

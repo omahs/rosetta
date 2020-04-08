@@ -1,4 +1,4 @@
-package celo
+package tracer
 
 import (
 	"context"

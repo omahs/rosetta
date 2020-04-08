@@ -1,4 +1,4 @@
-package monitor
+package main
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/celo-org/rosetta/celo/client"
 	"github.com/celo-org/rosetta/db"
+	"github.com/celo-org/rosetta/internal/signals"
 	"github.com/celo-org/rosetta/service"
 	"github.com/celo-org/rosetta/service/geth"
 	mservice "github.com/celo-org/rosetta/service/monitor"
@@ -68,7 +69,7 @@ func runMonitorWithGeth(ctx context.Context) error {
 }
 
 func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	ctx, stopFn := context.WithCancel(context.Background())
 	defer stopFn()
@@ -77,7 +78,10 @@ func main() {
 	go runMonitorWithGeth(ctx)
 
 	// wait a few seconds for everything to start
-	time.Sleep(10 * time.Second)
+	// time.Sleep(10 * time.Second)
+
+	gotExitSignal := signals.WatchForExitSignals()
+	<-gotExitSignal
 
 	// ADD your code here
 
