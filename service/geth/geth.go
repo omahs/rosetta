@@ -86,6 +86,10 @@ func (gs *gethService) Start(ctx context.Context) error {
 		return err
 	}
 
+	if err := gs.setupStaticNodes(); err != nil {
+		return err
+	}
+
 	if err := gs.startGeth(); err != nil {
 		return err
 	}
