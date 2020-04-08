@@ -30,15 +30,15 @@ func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists registryAddresses (contract chars(32), fromBlock bigint, fromTx int, address chars(40))"); err != nil {
+	if _, err := db.Exec("create table if not exists registryAddresses (contract text, fromBlock integer, fromTx integer, address blob)"); err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock bigint, val bigint)"); err != nil {
+	if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock integer, val integer)"); err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists stats (lastPersistedBlock bigint)"); err != nil { //TODO: limit entries to 1?
+	if _, err := db.Exec("create table if not exists stats (lastPersistedBlock integer)"); err != nil { //TODO: limit entries to 1?
 		return nil, err
 	}
 
@@ -70,7 +70,7 @@ func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error
 }
 
 func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
-	rows, err := cs.db.Query("select val from gasPriceMinimum where fromBlock <= ? order by desc fromblock limit 1", block)
+	rows, err := cs.db.Query("select val from gasPriceMinimum where fromBlock <= ? order by desc fromblock limit 1", block.Int64())
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (
 		if err := rows.Scan(value); err != nil {
 			return nil, err
 		}
-		log.Info("Gas Price Minimum Found", "block", block.Uint64(), "val", value.Uint64())
+		log.Info("Gas Price Minimum Found", "block", block.Int64(), "val", value.Int64())
 		return value, nil
 	}
 
@@ -92,7 +92,7 @@ func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (
 }
 
 func (cs *rosettaSqlDb) RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error) {
-	rows, err := cs.db.Query("select address from registryAddresses where id == ? and fromBlock <= ? and fromTx <= ? order by desc fromblock, fromTx limit 1", contractName, block, txIndex)
+	rows, err := cs.db.Query("select address from registryAddresses where id == ? and fromBlock <= ? and fromTx <= ? order by desc fromblock, fromTx limit 1", contractName, block.Int64(), int64(txIndex))
 	if err != nil {
 		return common.ZeroAddress, err
 	}
@@ -137,14 +137,14 @@ func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChange
 		return err
 	}
 
-	if _, err := tx.ExecContext(ctx, setLastPersistedBlockStmt, changeSet.BlockNumber, changeSet.BlockNumber); err != nil {
+	if _, err := tx.ExecContext(ctx, setLastPersistedBlockStmt, changeSet.BlockNumber.Int64(), changeSet.BlockNumber.Int64()); err != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
 			return rollbackErr
 		}
 		return err
 	}
 	if changeSet.GasPriceMinimun != nil {
-		if _, err := tx.ExecContext(ctx, setGasPriceMinimumOnStmt, changeSet.BlockNumber, changeSet.GasPriceMinimun); err != nil {
+		if _, err := tx.ExecContext(ctx, setGasPriceMinimumOnStmt, changeSet.BlockNumber.Int64(), changeSet.GasPriceMinimun.Int64()); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return rollbackErr
 			}
@@ -175,7 +175,7 @@ func (cs *rosettaSqlDb) setLastPersistedBlock(block *big.Int) error {
 }
 
 func (cs *rosettaSqlDb) setGasPriceMinimumOn(block, gasPriceMinimum *big.Int) error {
-	_, err := cs.db.Exec(setGasPriceMinimumOnStmt, block, gasPriceMinimum)
+	_, err := cs.db.Exec(setGasPriceMinimumOnStmt, block.Int64(), gasPriceMinimum.Int64())
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (cs *rosettaSqlDb) setGasPriceMinimumOn(block, gasPriceMinimum *big.Int) er
 }
 
 func (cs *rosettaSqlDb) setRegisteredAddressOn(contractName string, blockNumber *big.Int, txIndex uint, address common.Address) error {
-	_, err := cs.db.Exec(setRegisteredAddressOnStmt, contractName, blockNumber, txIndex, address)
+	_, err := cs.db.Exec(setRegisteredAddressOnStmt, contractName, blockNumber.Int64(), int64(txIndex), address)
 	if err != nil {
 		return err
 	}
