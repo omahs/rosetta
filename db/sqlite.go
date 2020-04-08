@@ -15,13 +15,9 @@ type rosettaSqlDb struct {
 }
 
 const (
-	setLastPersistedBlockStmt = `
-	case when exists select lastPersistedBlock from stats 
-			then update stats set lastPersistedBlock = ?
-			else insert into stats (lastPersistedBlock) values (?)
-	`
+	setLastPersistedBlockStmt  = "update stats set lastPersistedBlock = ?"
 	setGasPriceMinimumOnStmt   = "insert into gasPriceMinimum (fromBlock, val) values (?, ?, ?)"
-	setRegisteredAddressOnStmt = "insert into registeredAddresses (contract, fromBlock, fromTx, address) values (?, ?, ?, ?)"
+	setRegisteredAddressOnStmt = "insert into registryAddresses (contract, fromBlock, fromTx, address) values (?, ?, ?, ?)"
 )
 
 func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
@@ -38,7 +34,13 @@ func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists stats (lastPersistedBlock integer)"); err != nil { //TODO: limit entries to 1?
+	_, err = db.Exec(
+		`CREATE table IF NOT EXISTS stats (
+			Lock char(1) not null DEFAULT 'X',
+			lastPersistedBlock integer not null DEFAULT 0,
+			constraint pk_stats PRIMARY KEY (Lock),
+			constraint ck_stats_locked CHECK (Lock='X'))`)
+	if err != nil {
 		return nil, err
 	}
 
