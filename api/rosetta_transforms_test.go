@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/celo-org/rosetta/celo"
+	"github.com/celo-org/rosetta/tracer"
 	"github.com/ethereum/go-ethereum/common"
 	. "github.com/onsi/gomega"
 	gs "github.com/onsi/gomega/gstruct"
@@ -45,9 +45,9 @@ func TestMapTxHashesToTransaction(t *testing.T) {
 func TestTransferToOperations(t *testing.T) {
 	g := NewGomegaWithT(t)
 
-	transfer := celo.Transfer{
-		From:  celo.Account{Address: common.HexToAddress("1"), SubAccount: celo.Main},
-		To:    celo.Account{Address: common.HexToAddress("2"), SubAccount: celo.Main},
+	transfer := tracer.Transfer{
+		From:  tracer.Account{Address: common.HexToAddress("1"), SubAccount: tracer.Main},
+		To:    tracer.Account{Address: common.HexToAddress("2"), SubAccount: tracer.Main},
 		Value: big.NewInt(10000),
 	}
 
