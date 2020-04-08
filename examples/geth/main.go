@@ -20,11 +20,6 @@ var (
 	}
 )
 
-func runGeth(ctx context.Context) error {
-
-	return nil
-}
-
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 

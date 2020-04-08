@@ -18,7 +18,14 @@ func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes c
 		return err
 	}
 
-	for h := range headers {
+	for {
+		var h *types.Header
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case h = <-headers:
+		}
+
 		bcs := db.BlockChangeSet{
 			BlockNumber: h.Number,
 		}
@@ -40,7 +47,7 @@ func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes c
 				Contract:   iter.Event.Identifier,
 				NewAddress: iter.Event.Addr,
 			})
-			log.Info("Core Contract Address Changed", "name", iter.Event.Identifier, "newAddress", iter.Event.Addr, "txIndex", iter.Event.Raw.TxIndex)
+			log.Info("Core Contract Address Changed", "name", iter.Event.Identifier, "newAddress", iter.Event.Addr.Hex(), "txIndex", iter.Event.Raw.TxIndex)
 		}
 		if err != nil {
 			return err
@@ -54,6 +61,4 @@ func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes c
 		case changes <- &bcs:
 		}
 	}
-
-	return nil
 }
