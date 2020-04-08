@@ -11,7 +11,9 @@ import (
 )
 
 type rosettaSqlDb struct {
-	db *sql.DB
+	db                  *sql.DB
+	getLastBlockStmt    *sql.Stmt
+	updateLastBlockStmt *sql.Stmt
 }
 
 const (
@@ -20,55 +22,74 @@ const (
 	setRegisteredAddressOnStmt = "insert into registryAddresses (contract, fromBlock, fromTx, address) values (?, ?, ?, ?)"
 )
 
+func initDatabase(db *sql.DB) error {
+	if _, err := db.Exec("create table if not exists registryAddresses (contract text, fromBlock integer, fromTx integer, address blob)"); err != nil {
+		return err
+	}
+
+	if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock integer, val integer)"); err != nil {
+		return err
+	}
+
+	_, err := db.Exec(`CREATE table IF NOT EXISTS stats (lastPersistedBlock integer not null DEFAULT 0)`)
+	if err != nil {
+		return err
+	}
+
+	// Insert an initial lastPersistedBlock if none found
+	var count uint
+	if err := db.QueryRow("SELECT count(lastPersistedBlock) FROM stats").Scan(&count); err != nil {
+		return err
+	}
+
+	if count == 0 {
+		_, err := db.Exec(`INSERT INTO stats (lastPersistedBlock) VALUES(?)`, 0)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
 	db, err := sql.Open("sqlite3", dbpath)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists registryAddresses (contract text, fromBlock integer, fromTx integer, address blob)"); err != nil {
+	if err := initDatabase(db); err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock integer, val integer)"); err != nil {
+	getLastBlockStmt, err := db.Prepare("SELECT lastPersistedBlock FROM stats")
+	if err != nil {
 		return nil, err
 	}
 
-	_, err = db.Exec(
-		`CREATE table IF NOT EXISTS stats (
-			Lock char(1) not null DEFAULT 'X',
-			lastPersistedBlock integer not null DEFAULT 0,
-			constraint pk_stats PRIMARY KEY (Lock),
-			constraint ck_stats_locked CHECK (Lock='X'))`)
+	updateLastBlockStmt, err := db.Prepare("UPDATE stats SET lastPersistedBlock = $1")
 	if err != nil {
 		return nil, err
 	}
 
 	return &rosettaSqlDb{
-		db: db,
+		db:                  db,
+		getLastBlockStmt:    getLastBlockStmt,
+		updateLastBlockStmt: updateLastBlockStmt,
 	}, nil
 }
 
 func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error) {
-	rows, err := cs.db.QueryContext(ctx, "select lastPersistedBlock from stats")
-	if err != nil {
+	var block int64 // TODO: Figure out better (safer) way of storing bigints
+
+	if err := cs.getLastBlockStmt.QueryRowContext(ctx).Scan(&block); err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(block), nil
+		}
 		return nil, err
 	}
-	defer rows.Close()
 
-	var block int64 // TODO: Figure out better (safer) way of storing bigints
-	if rows.Next() {
-		if err := rows.Scan(&block); err != nil {
-			return nil, err
-		}
-		log.Info("Last Persisted Block Found", "block", block)
-		return big.NewInt(block), nil
-	}
-
-	if rows.Err() != nil {
-		return nil, rows.Err()
-	}
-	return big.NewInt(0), nil
+	return big.NewInt(block), nil
 }
 
 func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
@@ -133,18 +154,19 @@ func (cs *rosettaSqlDb) RegistryAddressesOn(ctx context.Context, block *big.Int,
 
 func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChangeSet) error {
 
-	//TODO: check if this is the right isolation level, or should keep default
-	tx, err := cs.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	tx, err := cs.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	if _, err := tx.ExecContext(ctx, setLastPersistedBlockStmt, changeSet.BlockNumber.Int64(), changeSet.BlockNumber.Int64()); err != nil {
+	_, err = tx.StmtContext(ctx, cs.updateLastBlockStmt).ExecContext(ctx, changeSet.BlockNumber.Int64())
+	if err != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
 			return rollbackErr
 		}
 		return err
 	}
+
 	if changeSet.GasPriceMinimun != nil {
 		if _, err := tx.ExecContext(ctx, setGasPriceMinimumOnStmt, changeSet.BlockNumber.Int64(), changeSet.GasPriceMinimun.Int64()); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
@@ -171,29 +193,5 @@ func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChange
 		return err
 	}
 
-	return nil
-}
-
-func (cs *rosettaSqlDb) setLastPersistedBlock(ctx context.Context, block *big.Int) error {
-	_, err := cs.db.ExecContext(ctx, setLastPersistedBlockStmt, block.Int64(), block.Int64())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (cs *rosettaSqlDb) setGasPriceMinimumOn(ctx context.Context, block, gasPriceMinimum *big.Int) error {
-	_, err := cs.db.ExecContext(ctx, setGasPriceMinimumOnStmt, block.Int64(), gasPriceMinimum.Int64())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (cs *rosettaSqlDb) setRegisteredAddressOn(ctx context.Context, contractName string, blockNumber *big.Int, txIndex uint, address common.Address) error {
-	_, err := cs.db.ExecContext(ctx, setRegisteredAddressOnStmt, contractName, blockNumber.Int64(), int64(txIndex), address)
-	if err != nil {
-		return err
-	}
 	return nil
 }
