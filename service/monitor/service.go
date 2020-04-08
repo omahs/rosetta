@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"sync"
@@ -71,7 +72,9 @@ func (ms *monitorService) Start(ctx context.Context) error {
 		defer wg.Done()
 		err := HeaderListener(ctx, headerCh, ms.cc, ms.logger, startBlock)
 		if err != nil {
-			errorCollector.Add(err)
+			if errors.Is(err, context.Canceled) {
+				errorCollector.Add(err)
+			}
 			stopAll()
 		}
 	}()
@@ -81,7 +84,9 @@ func (ms *monitorService) Start(ctx context.Context) error {
 		defer wg.Done()
 		err := BlockProcessor(ctx, headerCh, changeSetsCh, ms.cc, ms.db)
 		if err != nil {
-			errorCollector.Add(err)
+			if errors.Is(err, context.Canceled) {
+				errorCollector.Add(err)
+			}
 			stopAll()
 		}
 	}()
@@ -91,7 +96,9 @@ func (ms *monitorService) Start(ctx context.Context) error {
 		defer wg.Done()
 		err := ProcessChanges(ctx, changeSetsCh, ms.db, ms.logger)
 		if err != nil {
-			errorCollector.Add(err)
+			if errors.Is(err, context.Canceled) {
+				errorCollector.Add(err)
+			}
 			stopAll()
 		}
 	}()

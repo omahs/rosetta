@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var ErrAlreadyRunning = errors.New("Service already running")
@@ -28,28 +26,11 @@ type Service interface {
 // Monitor Service (package monitor)
 
 func RunServices(ctx context.Context, services ...Service) error {
-	ctx, cancelFn := context.WithCancel(ctx)
-	defer cancelFn()
-
-	var wg sync.WaitGroup
-	wg.Add(len(services))
-
-	errors := NewErrorCollector()
-	for _, _srv := range services {
-		go func(srv Service) {
-			defer wg.Done()
-			log.Info("Starting service", "srv", srv.Name())
-			err := srv.Start(ctx)
-			if err != nil {
-				// Stop Services on the first error occured
-				cancelFn()
-				errors.Add(err)
-			}
-		}(_srv)
+	sm := NewServiceManager(ctx)
+	for _, srv := range services {
+		sm.Add(srv)
 	}
-
-	wg.Wait()
-	return errors.Error()
+	return sm.Wait()
 }
 
 type ServiceManager struct {
@@ -74,7 +55,9 @@ func (sm *ServiceManager) Add(srv Service) {
 		defer sm.wg.Done()
 		err := srv.Start(sm.ctx)
 		if err != nil {
-			sm.errorCollector.Add(err)
+			if errors.Is(err, context.Canceled) {
+				sm.errorCollector.Add(err)
+			}
 			sm.stopAll()
 		}
 	}()
