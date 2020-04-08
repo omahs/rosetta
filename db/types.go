@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var ErrNotFound = errors.New("db: record not found")
+var ErrContractNotFound = errors.New("db: contract record not found")
 
 type RosettaDBReader interface {
 	// LastPersistedBlock will return the last block that was persisted
@@ -20,7 +20,7 @@ type RosettaDBReader interface {
 	GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error)
 
 	// RegistryAddressOn returns the address of the contract at the point in history (block, txIndex)
-	// In case there's no record for that contract it will fail with ErrNotFound
+	// In case there's no record for that contract it will fail with ErrContractNotFound
 	RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error)
 
 	// RegistryAddressesOn returns the address of the contracts at the point in history (block, txIndex)

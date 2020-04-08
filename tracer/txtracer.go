@@ -48,9 +48,7 @@ func (tc *TxTracer) GasDetail() (map[common.Address]*big.Int, error) {
 	balanceChanges := make(map[common.Address]*big.Int)
 
 	governanceAddress, err := tc.db.RegistryAddressOn(tc.ctx, tc.blockHeader.Number, tc.receipt.TransactionIndex, "Governance")
-	if err == db.ErrNotFound {
-		governanceAddress = common.ZeroAddress
-	} else if err != nil {
+	if err != nil && err != db.ErrContractNotFound {
 		return nil, err
 	}
 

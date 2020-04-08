@@ -30,15 +30,15 @@ func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
 		return nil, err
 	}
 
-	if _, err := db.Exec("CREATE TABLE registryAddresses (contract chars(32), fromBlock bigint, fromTx int, address chars(40))"); err != nil {
+	if _, err := db.Exec("create table if not exists registryAddresses (contract chars(32), fromBlock bigint, fromTx int, address chars(40))"); err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("CREATE TABLE gasPriceMinimum (fromBlock bigint, val bigint)"); err != nil {
+	if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock bigint, val bigint)"); err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("CREATE TABLE stats (lastPersistedBlock bigint)"); err != nil { //TODO: limit entries to 1?
+	if _, err := db.Exec("create table if not exists stats (lastPersistedBlock bigint)"); err != nil { //TODO: limit entries to 1?
 		return nil, err
 	}
 
@@ -67,7 +67,6 @@ func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error
 		return nil, rows.Err()
 	}
 	return big.NewInt(0), nil
-
 }
 
 func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
@@ -83,13 +82,13 @@ func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (
 			return nil, err
 		}
 		log.Info("Gas Price Minimum Found", "block", block.Uint64(), "val", value.Uint64())
-	} else {
-		return nil, rows.Err()
+		return value, nil
 	}
 
-	// TODO if not present => Default to Zero
-
-	return value, nil
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return big.NewInt(0), nil
 }
 
 func (cs *rosettaSqlDb) RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error) {
@@ -105,11 +104,14 @@ func (cs *rosettaSqlDb) RegistryAddressOn(ctx context.Context, block *big.Int, t
 			return common.ZeroAddress, err
 		}
 		log.Info("Registry Address Found", "contract", contractName, "address", address)
-	} else {
+		return address, nil
+	}
+
+	if rows.Err() != nil {
 		return common.ZeroAddress, rows.Err()
 	}
 
-	return address, nil
+	return common.ZeroAddress, ErrContractNotFound
 }
 
 func (cs *rosettaSqlDb) RegistryAddressesOn(ctx context.Context, block *big.Int, txIndex uint, contractNames ...string) (map[string]common.Address, error) {
@@ -117,7 +119,7 @@ func (cs *rosettaSqlDb) RegistryAddressesOn(ctx context.Context, block *big.Int,
 	// TODO: Could this be done more efficiently, perhaps concurrently?
 	for _, name := range contractNames {
 		address, err := cs.RegistryAddressOn(ctx, block, txIndex, name)
-		if err == ErrNotFound {
+		if err == ErrContractNotFound {
 			continue
 		} else if err != nil {
 			return nil, err
