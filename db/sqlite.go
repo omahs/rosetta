@@ -54,13 +54,13 @@ func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error
 	}
 	defer rows.Close()
 
-	var block *big.Int
+	var block int64 // TODO: Figure out better (safer) way of storing bigints
 	if rows.Next() {
-		if err := rows.Scan(block); err != nil {
+		if err := rows.Scan(&block); err != nil {
 			return nil, err
 		}
-		log.Info("Last Persisted Block Found", "block", block.Uint64())
-		return block, nil
+		log.Info("Last Persisted Block Found", "block", block)
+		return big.NewInt(block), nil
 	}
 
 	if rows.Err() != nil {
@@ -76,13 +76,13 @@ func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (
 	}
 	defer rows.Close()
 
-	var value *big.Int
+	var value int64
 	if rows.Next() {
-		if err := rows.Scan(value); err != nil {
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		log.Info("Gas Price Minimum Found", "block", block.Int64(), "val", value.Int64())
-		return value, nil
+		log.Info("Gas Price Minimum Found", "block", block.Int64(), "val", value)
+		return big.NewInt(value), nil
 	}
 
 	if rows.Err() != nil {
@@ -152,7 +152,7 @@ func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChange
 		}
 	}
 	for _, rc := range changeSet.RegistryChanges {
-		if _, err := tx.ExecContext(ctx, setRegisteredAddressOnStmt, rc.Contract, changeSet.BlockNumber, rc.TxIndex, rc.NewAddress); err != nil {
+		if _, err := tx.ExecContext(ctx, setRegisteredAddressOnStmt, rc.Contract, changeSet.BlockNumber.Int64(), int64(rc.TxIndex), rc.NewAddress); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return rollbackErr
 			}
