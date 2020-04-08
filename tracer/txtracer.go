@@ -6,7 +6,9 @@ import (
 	"math/big"
 
 	"github.com/celo-org/rosetta/celo/client"
+	"github.com/celo-org/rosetta/celo/client/debug"
 	"github.com/celo-org/rosetta/celo/contract"
+	"github.com/celo-org/rosetta/contract"
 	"github.com/celo-org/rosetta/db"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -111,7 +113,8 @@ func (tc *TxTracer) TransferDetail() ([]Transfer, error) {
 				Address:    it.To,
 				SubAccount: Main,
 			},
-			Value: it.Value,
+			Value:  it.Value,
+			Status: it.Status.String() == debug.TransferStatusSuccess.String(),
 		}
 	}
 	return transfers, nil
