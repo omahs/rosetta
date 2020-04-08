@@ -9,10 +9,10 @@ import (
 
 func ProcessChanges(ctx context.Context, changes <-chan *db.BlockChangeSet, dbWriter db.RosettaDBWriter, logger log.Logger) error {
 	for changeSet := range changes {
-		logger.Info("Storing block changes", "block", changeSet.BlockNumber, "registryUpdates", len(changeSet.RegistryChanges))
 		if err := dbWriter.ApplyChanges(ctx, changeSet); err != nil {
 			return err
 		}
+		logger.Info("Stored block changes", "block", changeSet.BlockNumber, "registryUpdates", len(changeSet.RegistryChanges))
 	}
 	return nil
 }

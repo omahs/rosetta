@@ -162,12 +162,13 @@ func (gs *gethService) startGeth() error {
 		"--rpc",
 		"--rpcaddr", "127.0.0.1",
 		"--rpcapi", "eth,net,web3,debug,admin,personal",
+		"--ws",
 		"--light.serve", "0",
 		"--light.maxpeers", "0",
 		"--maxpeers", "1100",
 		"--gcmode", "archive",
 		"--consoleformat", "term",
-		"--consoleoutput", "split",
+		// "--consoleoutput", "split",
 	}
 
 	fmt.Println("geth", strings.Join(gethArgs, " "))
@@ -182,8 +183,8 @@ func (gs *gethService) startGeth() error {
 
 	cmd := gs.gethCmd(gethArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Stdout = f
-	cmd.Stderr = os.Stdout
+	// cmd.Stdout = f
+	cmd.Stderr = f
 
 	if err = cmd.Start(); err != nil {
 		gs.logger.Error("Error starting geth", "err", err)

@@ -25,64 +25,42 @@ var (
 	}
 )
 
-func runMonitorWithGeth(ctx context.Context) error {
-	gethSrv := geth.NewGethService(gethBinary, datadir, genesis, staticNodes)
-
-	if err := gethSrv.Setup(); err != nil {
-		log.Error("Error on geth setup", "err", err)
-		return err
-	}
-
-	chainParams := gethSrv.ChainParameters()
-	log.Info("Detected Chain Parameters", "chainId", chainParams.ChainId, "epochSize", chainParams.EpochSize)
-
-	nodeUri := gethSrv.IpcFilePath()
-	log.Debug("celo nodes ipc file", "filepath", nodeUri)
+func main() {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	celoStore, err := db.NewSqliteDb(sqlitepath)
 	if err != nil {
 		log.Error("Error opening CeloStore", "err", err)
-		return err
+		os.Exit(1)
 	}
-
-	sm := service.NewServiceManager(ctx)
-
-	sm.Add(gethSrv)
-
-	time.Sleep(5 * time.Second)
-
-	cc, err := client.Dial(nodeUri)
-	if err != nil {
-		log.Error("Error on client connection to geth", "err", err)
-		return err
-	}
-
-	monitorSrv := mservice.NewMonitorService(cc, celoStore)
-
-	sm.Add(monitorSrv)
-
-	if err = sm.Wait(); err != nil {
-		log.Error("Error running Services", "err", err)
-		return err
-	}
-	return nil
-}
-
-func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	ctx, stopFn := context.WithCancel(context.Background())
 	defer stopFn()
 
-	// run the monitor on the background
-	go runMonitorWithGeth(ctx)
+	go func() {
+		gotExitSignal := signals.WatchForExitSignals()
+		<-gotExitSignal
+		stopFn()
+	}()
 
-	// wait a few seconds for everything to start
-	// time.Sleep(10 * time.Second)
+	sm := service.NewServiceManager(ctx)
+	gethSrv := geth.NewGethService(gethBinary, datadir, genesis, staticNodes)
+	sm.Add(gethSrv)
 
-	gotExitSignal := signals.WatchForExitSignals()
-	<-gotExitSignal
+	// Wait for geth to start and connect to it
+	time.Sleep(5 * time.Second)
+	cc, err := client.Dial("http://localhost:8545")
+	// cc, err := client.Dial("ws://localhost:8546")
+	// cc, err := client.Dial(gethSrv.IpcFilePath())
+	if err != nil {
+		log.Error("Error on client connection to geth", "err", err)
+		os.Exit(1)
+	}
 
-	// ADD your code here
+	sm.Add(mservice.NewMonitorService(cc, celoStore))
 
+	if err = sm.Wait(); err != nil {
+		log.Error("Error running Services", "err", err)
+		os.Exit(1)
+	}
 }

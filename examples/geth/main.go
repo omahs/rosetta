@@ -33,11 +33,6 @@ func main() {
 
 	gethSrv := geth.NewGethService(gethBinary, datadir, genesis, staticNodes)
 
-	if err := gethSrv.Setup(); err != nil {
-		log.Error("Error on geth setup", "err", err)
-		os.Exit(1)
-	}
-
 	sm := service.NewServiceManager(ctx)
 	sm.Add(gethSrv)
 

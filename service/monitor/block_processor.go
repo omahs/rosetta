@@ -29,6 +29,9 @@ func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes c
 			Start:   blockNumber,
 			Context: ctx,
 		}, nil)
+		if err != nil {
+			return err
+		}
 
 		registryChanges := make([]db.RegistryChange, 0)
 		for iter.Next() {

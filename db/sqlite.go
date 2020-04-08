@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"math/big"
 
+	"github.com/celo-org/rosetta/internal/fileutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	_ "github.com/mattn/go-sqlite3"
@@ -25,21 +26,24 @@ const (
 )
 
 func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
+	isNew := !fileutils.FileExists(dbpath)
+
 	db, err := sql.Open("sqlite3", dbpath)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := db.Exec("create table if not exists registryAddresses (contract chars(32), fromBlock bigint, fromTx int, address chars(40))"); err != nil {
-		return nil, err
-	}
-
-	if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock bigint, val bigint)"); err != nil {
-		return nil, err
-	}
-
-	if _, err := db.Exec("create table if not exists stats (lastPersistedBlock bigint)"); err != nil { //TODO: limit entries to 1?
-		return nil, err
+	if isNew {
+		if _, err := db.Exec("create table if not exists registryAddresses (contract chars(32), fromBlock bigint, fromTx int, address chars(40))"); err != nil {
+			return nil, err
+		}
+	
+		if _, err := db.Exec("create table if not exists gasPriceMinimum (fromBlock bigint, val bigint)"); err != nil {
+			return nil, err
+		}
+	
+		if _, err := db.Exec("create table if not exists stats (lastPersistedBlock bigint)"); err != nil { //TODO: limit entries to 1?
+			return nil, err
 	}
 
 	return &rosettaSqlDb{
