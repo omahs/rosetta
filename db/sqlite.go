@@ -6,19 +6,22 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type rosettaSqlDb struct {
-	db                  *sql.DB
-	getLastBlockStmt    *sql.Stmt
-	updateLastBlockStmt *sql.Stmt
+	db *sql.DB
+
+	getLastBlockStmt          *sql.Stmt
+	updateLastBlockStmt       *sql.Stmt
+	getRegistryAddressStmt    *sql.Stmt
+	getGasPriceMinimumStmt    *sql.Stmt
+	insertGasPriceMinimumStmt *sql.Stmt
+	insertRegistryAddressStmt *sql.Stmt
 }
 
 const (
-	setLastPersistedBlockStmt  = "update stats set lastPersistedBlock = ?"
-	setGasPriceMinimumOnStmt   = "insert into gasPriceMinimum (fromBlock, val) values (?, ?, ?)"
+	setGasPriceMinimumOnStmt   = "insert into gasPriceMinimum (fromBlock, val) values (?, ?)"
 	setRegisteredAddressOnStmt = "insert into registryAddresses (contract, fromBlock, fromTx, address) values (?, ?, ?, ?)"
 )
 
@@ -62,20 +65,56 @@ func NewSqliteDb(dbpath string) (*rosettaSqlDb, error) {
 		return nil, err
 	}
 
-	getLastBlockStmt, err := db.Prepare("SELECT lastPersistedBlock FROM stats")
-	if err != nil {
-		return nil, err
-	}
-
 	updateLastBlockStmt, err := db.Prepare("UPDATE stats SET lastPersistedBlock = $1")
 	if err != nil {
 		return nil, err
 	}
 
+	insertGasPriceMinimumStmt, err := db.Prepare("INSERT INTO gasPriceMinimum (fromBlock, val) VALUES (?, ?)")
+	if err != nil {
+		return nil, err
+	}
+
+	insertRegistryAddressStmt, err := db.Prepare("INSERT INTO registryAddresses (contract, fromBlock, fromTx, address) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return nil, err
+	}
+
+	getLastBlockStmt, err := db.Prepare("SELECT lastPersistedBlock FROM stats")
+	if err != nil {
+		return nil, err
+	}
+
+	getRegistryAddressStmt, err := db.Prepare(`
+		SELECT address 
+			FROM registryAddresses 
+			WHERE contract == $1 and (fromBlock < $2 OR (fromBlock = $2 AND fromTx <= $3)) 
+			ORDER BY fromblock DESC, fromTx DESC 
+			LIMIT 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	getGasPriceMinimumStmt, err := db.Prepare(`
+		SELECT val 
+			FROM gasPriceMinimum 
+			WHERE fromBlock <= $1 
+			ORDER BY fromblock DESC
+			LIMIT 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+
 	return &rosettaSqlDb{
-		db:                  db,
-		getLastBlockStmt:    getLastBlockStmt,
-		updateLastBlockStmt: updateLastBlockStmt,
+		db:                        db,
+		getLastBlockStmt:          getLastBlockStmt,
+		updateLastBlockStmt:       updateLastBlockStmt,
+		getRegistryAddressStmt:    getRegistryAddressStmt,
+		getGasPriceMinimumStmt:    getGasPriceMinimumStmt,
+		insertGasPriceMinimumStmt: insertGasPriceMinimumStmt,
+		insertRegistryAddressStmt: insertRegistryAddressStmt,
 	}, nil
 }
 
@@ -93,48 +132,29 @@ func (cs *rosettaSqlDb) LastPersistedBlock(ctx context.Context) (*big.Int, error
 }
 
 func (cs *rosettaSqlDb) GasPriceMinimunOn(ctx context.Context, block *big.Int) (*big.Int, error) {
-	rows, err := cs.db.QueryContext(ctx, "select val from gasPriceMinimum where fromBlock <= ? order by desc fromblock limit 1", block.Int64())
-	if err != nil {
+	var gpm int64
+
+	if err := cs.getGasPriceMinimumStmt.QueryRowContext(ctx, block.Uint64()).Scan(&gpm); err != nil {
+		if err == sql.ErrNoRows {
+			return big.NewInt(0), nil
+		}
 		return nil, err
 	}
-	defer rows.Close()
 
-	var value int64
-	if rows.Next() {
-		if err := rows.Scan(&value); err != nil {
-			return nil, err
-		}
-		log.Info("Gas Price Minimum Found", "block", block.Int64(), "val", value)
-		return big.NewInt(value), nil
-	}
-
-	if rows.Err() != nil {
-		return nil, rows.Err()
-	}
-	return big.NewInt(0), nil
+	return big.NewInt(gpm), nil
 }
 
 func (cs *rosettaSqlDb) RegistryAddressOn(ctx context.Context, block *big.Int, txIndex uint, contractName string) (common.Address, error) {
-	rows, err := cs.db.QueryContext(ctx, "select address from registryAddresses where id == ? and fromBlock <= ? and fromTx <= ? order by desc fromblock, fromTx limit 1", contractName, block.Int64(), int64(txIndex))
-	if err != nil {
+	var addr common.Address
+
+	if err := cs.getRegistryAddressStmt.QueryRowContext(ctx, contractName, block.Uint64(), txIndex).Scan(&addr); err != nil {
+		if err == sql.ErrNoRows {
+			return common.ZeroAddress, ErrContractNotFound
+		}
 		return common.ZeroAddress, err
 	}
-	defer rows.Close()
 
-	var address common.Address
-	if rows.Next() {
-		if err := rows.Scan(&address); err != nil {
-			return common.ZeroAddress, err
-		}
-		log.Info("Registry Address Found", "contract", contractName, "address", address)
-		return address, nil
-	}
-
-	if rows.Err() != nil {
-		return common.ZeroAddress, rows.Err()
-	}
-
-	return common.ZeroAddress, ErrContractNotFound
+	return addr, nil
 }
 
 func (cs *rosettaSqlDb) RegistryAddressesOn(ctx context.Context, block *big.Int, txIndex uint, contractNames ...string) (map[string]common.Address, error) {
@@ -168,7 +188,8 @@ func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChange
 	}
 
 	if changeSet.GasPriceMinimun != nil {
-		if _, err := tx.ExecContext(ctx, setGasPriceMinimumOnStmt, changeSet.BlockNumber.Int64(), changeSet.GasPriceMinimun.Int64()); err != nil {
+		_, err = tx.StmtContext(ctx, cs.insertGasPriceMinimumStmt).ExecContext(ctx, changeSet.BlockNumber.Int64(), changeSet.GasPriceMinimun.Int64())
+		if err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return rollbackErr
 			}
@@ -176,10 +197,7 @@ func (cs *rosettaSqlDb) ApplyChanges(ctx context.Context, changeSet *BlockChange
 		}
 	}
 
-	setRegisteredAddressOnStmtPrep, err := tx.PrepareContext(ctx, setRegisteredAddressOnStmt)
-	if err != nil {
-		return err
-	}
+	setRegisteredAddressOnStmtPrep := tx.StmtContext(ctx, cs.insertRegistryAddressStmt)
 
 	for _, rc := range changeSet.RegistryChanges {
 		if _, err := setRegisteredAddressOnStmtPrep.ExecContext(ctx, rc.Contract, changeSet.BlockNumber.Int64(), int64(rc.TxIndex), rc.NewAddress); err != nil {
