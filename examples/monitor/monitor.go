@@ -49,9 +49,9 @@ func main() {
 
 	// Wait for geth to start and connect to it
 	time.Sleep(5 * time.Second)
-	cc, err := client.Dial("http://localhost:8545")
+	// cc, err := client.Dial("http://localhost:8545")
 	// cc, err := client.Dial("ws://localhost:8546")
-	// cc, err := client.Dial(gethSrv.IpcFilePath())
+	cc, err := client.Dial(gethSrv.IpcFilePath())
 	if err != nil {
 		log.Error("Error on client connection to geth", "err", err)
 		os.Exit(1)

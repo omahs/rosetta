@@ -8,6 +8,7 @@ import (
 )
 
 func ProcessChanges(ctx context.Context, changes <-chan *db.BlockChangeSet, dbWriter db.RosettaDBWriter, logger log.Logger) error {
+	logger = logger.New("pipe", "persister")
 	var count uint
 	for {
 		select {

@@ -8,10 +8,11 @@ import (
 	"github.com/celo-org/rosetta/db"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/prometheus/common/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes chan<- *db.BlockChangeSet, cc *client.CeloClient, db_ db.RosettaDBReader) error {
+func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes chan<- *db.BlockChangeSet, cc *client.CeloClient, db_ db.RosettaDBReader, logger log.Logger) error {
+	logger = logger.New("pipe", "processor")
 
 	registry, err := wrapper.NewRegistry(cc)
 	if err != nil {
@@ -47,7 +48,7 @@ func BlockProcessor(ctx context.Context, headers <-chan *types.Header, changes c
 				Contract:   iter.Event.Identifier,
 				NewAddress: iter.Event.Addr,
 			})
-			log.Info("Core Contract Address Changed", "name", iter.Event.Identifier, "newAddress", iter.Event.Addr.Hex(), "txIndex", iter.Event.Raw.TxIndex)
+			logger.Info("Core Contract Address Changed", "name", iter.Event.Identifier, "newAddress", iter.Event.Addr.Hex(), "txIndex", iter.Event.Raw.TxIndex)
 		}
 		if err != nil {
 			return err
