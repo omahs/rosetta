@@ -28,7 +28,6 @@ type gethService struct {
 	cmd     *exec.Cmd
 	running service.RunningLock
 	logger  log.Logger
-	errors  chan error
 }
 
 func NewGethService(
