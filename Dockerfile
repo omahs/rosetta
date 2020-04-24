@@ -65,7 +65,7 @@ RUN go build -o rosetta .
 #---------------------------------------------------------------------
 
 # 97a0b37cd4fe469a468b928f74506246c18dc855 is the latest image from celo-blockchain mc/rosetta-rc0
-FROM us.gcr.io/celo-testnet/geth:97a0b37cd4fe469a468b928f74506246c18dc855
+FROM us.gcr.io/celo-testnet/geth:ae5e63bdd9e8e8a562938d890a708d6c8a8f9b47
 ARG COMMIT_SHA
 
 RUN apk add --no-cache ca-certificates
@@ -78,5 +78,3 @@ ENV ROSETTA_GETH="/usr/local/bin/geth"
 ENV ROSETTA_GENESIS="/data/genesis.json"
 ENTRYPOINT ["/usr/local/bin/rosetta"]
 CMD ["run"]
-
-
