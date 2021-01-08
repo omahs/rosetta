@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/celo-org/kliento/client"
 	"github.com/celo-org/kliento/contracts"
@@ -31,6 +32,7 @@ import (
 	"github.com/celo-org/rosetta/airgap/server"
 	"github.com/celo-org/rosetta/analyzer"
 	"github.com/celo-org/rosetta/db"
+	"github.com/coinbase/rosetta-sdk-go/parser"
 	"github.com/coinbase/rosetta-sdk-go/types"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -712,13 +714,130 @@ func (s *Servicer) ConstructionPayloads(
 	}, nil
 }
 
+// TODO move to utils?
+// checksumAddress ensures an Ethereum hex address
+// is in Checksum Format and converts it to an Address.
+// If it cannot be converted, it returns !ok.
+func checksumAddress(address string) (*common.Address, bool) {
+	var addr common.Address
+	mcAddr, err := common.NewMixedcaseAddressFromString(address)
+	if err != nil {
+		return &addr, false
+	}
+	addr = mcAddr.Address()
+	return &addr, true
+}
+
+// parseSendOps extracts TxArgs from operations or errors.
+func parseSendOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
+	descriptions := &parser.Descriptions{
+		OperationDescriptions: []*parser.OperationDescription{
+			{
+				Type:    analyzer.OpSend.String(),
+				Account: &parser.AccountDescription{Exists: true},
+				Amount:  &parser.AmountDescription{Exists: false},
+				Metadata: []*parser.MetadataDescription{
+					{Key: "method", ValueKind: reflect.String},
+					{Key: "args", ValueKind: reflect.Slice},
+				},
+			},
+		},
+		ErrUnmatched: true,
+	}
+
+	matches, err := parser.MatchOperations(descriptions, ops)
+	if err != nil {
+		return nil, false
+	}
+
+	// TxArgs enforces that parameters will be passed in to get metadata.
+	var txArgs airgap.TxArgs
+	fromOp, _ := matches[0].First()
+	err = airgap.UnmarshallFromMap(fromOp.Metadata, &txArgs)
+	if err != nil {
+		return nil, false
+	}
+	fromAddr, ok := checksumAddress(fromOp.Account.Address)
+	if !ok {
+		return nil, false
+	}
+	txArgs.From = *fromAddr
+	return &txArgs, true
+}
+
+// parseTransferOps extracts TxArgs from operations or errors.
+func parseTransferOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
+	descriptions := &parser.Descriptions{
+		OperationDescriptions: []*parser.OperationDescription{
+			{
+				Type:    analyzer.OpTransfer.String(),
+				Account: &parser.AccountDescription{Exists: true},
+				Amount: &parser.AmountDescription{
+					Exists:   true,
+					Sign:     parser.NegativeAmountSign,
+					Currency: CeloGold,
+				},
+			},
+			{
+				Type:    analyzer.OpTransfer.String(),
+				Account: &parser.AccountDescription{Exists: true},
+				Amount: &parser.AmountDescription{
+					Exists:   true,
+					Sign:     parser.PositiveAmountSign,
+					Currency: CeloGold,
+				},
+			},
+		},
+		OppositeAmounts: [][]int{{0, 1}},
+		ErrUnmatched:    true,
+	}
+	matches, err := parser.MatchOperations(descriptions, ops)
+	if err != nil {
+		return nil, false
+	}
+	fromOp, _ := matches[0].First()
+	fromAddr, ok := checksumAddress(fromOp.Account.Address)
+	if !ok {
+		return nil, false
+	}
+	toOp, _ := matches[1].First()
+	toAddr, ok := checksumAddress(toOp.Account.Address)
+	if !ok {
+		return nil, false
+	}
+
+	var txArgs airgap.TxArgs
+	txArgs.From = *fromAddr
+	txArgs.To = toAddr
+	txArgs.Value, ok = new(big.Int).SetString(toOp.Amount.Value, 10)
+	if !ok {
+		return nil, false
+	}
+
+	return &txArgs, true
+}
+
 func (s *Servicer) ConstructionPreprocess(
 	ctx context.Context,
 	req *types.ConstructionPreprocessRequest,
 ) (*types.ConstructionPreprocessResponse, *types.Error) {
-	options := make(map[string]interface{})
-	options["From"] = req.Operations[0].Account.Address
-	options["To"] = req.Operations[1].Account.Address
+
+	// TODO make into a switch
+	var txArgs *airgap.TxArgs
+	var match bool
+	// TODO --> ordered parsing list;
+
+	txArgs, match = parseSendOps(req.Operations)
+	if !match {
+		txArgs, match = parseTransferOps(req.Operations)
+		if !match {
+			return nil, ErrValidation
+		}
+	}
+	options, err := airgap.MarshallToMap(txArgs)
+	if err != nil {
+		return nil, ErrInternal
+	}
 	return &types.ConstructionPreprocessResponse{
 		Options: options,
 	}, nil

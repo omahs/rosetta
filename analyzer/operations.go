@@ -53,6 +53,7 @@ type OperationType string
 const (
 	OpFee                        OperationType = "fee"
 	OpTransfer                   OperationType = "transfer"
+	OpSend                       OperationType = "send"
 	OpCreateAccount              OperationType = "createAccount"
 	OpAuthorizeVoteSigner        OperationType = "authorizeVoteSigner"
 	OpAuthorizeValidatorSigner   OperationType = "authorizeValidatorSigner"
@@ -78,6 +79,7 @@ func (ot OperationType) requiresTransfer() bool {
 var AllOperationTypes = []OperationType{
 	OpFee,
 	OpTransfer,
+	OpSend,
 	OpCreateAccount,
 	OpAuthorizeValidatorSigner,
 	OpAuthorizeAttestationSigner,
