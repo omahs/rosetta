@@ -729,7 +729,7 @@ func checksumAddress(address string) (*common.Address, bool) {
 }
 
 // parseSendOps extracts TxArgs from operations or errors.
-func parseSendOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
+func parseSendOps(ops []*types.Operation) (*airgap.TxArgs, *types.Error) {
 	descriptions := &parser.Descriptions{
 		OperationDescriptions: []*parser.OperationDescription{
 			{
@@ -747,7 +747,7 @@ func parseSendOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
 
 	matches, err := parser.MatchOperations(descriptions, ops)
 	if err != nil {
-		return nil, false
+		return nil, ErrUnclearIntent
 	}
 
 	// TxArgs enforces that parameters will be passed in to get metadata.
@@ -755,18 +755,18 @@ func parseSendOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
 	fromOp, _ := matches[0].First()
 	err = airgap.UnmarshallFromMap(fromOp.Metadata, &txArgs)
 	if err != nil {
-		return nil, false
+		return nil, ErrInternal
 	}
 	fromAddr, ok := checksumAddress(fromOp.Account.Address)
 	if !ok {
-		return nil, false
+		return nil, ErrValidation
 	}
 	txArgs.From = *fromAddr
-	return &txArgs, true
+	return &txArgs, nil
 }
 
 // parseTransferOps extracts TxArgs from operations or errors.
-func parseTransferOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
+func parseTransferOps(ops []*types.Operation) (*airgap.TxArgs, *types.Error) {
 	descriptions := &parser.Descriptions{
 		OperationDescriptions: []*parser.OperationDescription{
 			{
@@ -793,17 +793,17 @@ func parseTransferOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
 	}
 	matches, err := parser.MatchOperations(descriptions, ops)
 	if err != nil {
-		return nil, false
+		return nil, ErrUnclearIntent
 	}
 	fromOp, _ := matches[0].First()
 	fromAddr, ok := checksumAddress(fromOp.Account.Address)
 	if !ok {
-		return nil, false
+		return nil, ErrValidation
 	}
 	toOp, _ := matches[1].First()
 	toAddr, ok := checksumAddress(toOp.Account.Address)
 	if !ok {
-		return nil, false
+		return nil, ErrValidation
 	}
 
 	var txArgs airgap.TxArgs
@@ -811,10 +811,10 @@ func parseTransferOps(ops []*types.Operation) (*airgap.TxArgs, bool) {
 	txArgs.To = toAddr
 	txArgs.Value, ok = new(big.Int).SetString(toOp.Amount.Value, 10)
 	if !ok {
-		return nil, false
+		return nil, ErrInternal
 	}
 
-	return &txArgs, true
+	return &txArgs, nil
 }
 
 func (s *Servicer) ConstructionPreprocess(
@@ -822,17 +822,23 @@ func (s *Servicer) ConstructionPreprocess(
 	req *types.ConstructionPreprocessRequest,
 ) (*types.ConstructionPreprocessResponse, *types.Error) {
 
-	// TODO make into a switch
-	var txArgs *airgap.TxArgs
-	var match bool
-	// TODO --> ordered parsing list;
+	if len(req.Operations) < 1 {
+		return nil, ErrValidation
+	}
+	// Select proper parser based on first operation; more efficient than trying to parse every format
+	var parseOps func(ops []*types.Operation) (*airgap.TxArgs, *types.Error)
+	switch req.Operations[0].Type {
+	case analyzer.OpTransfer.String():
+		parseOps = parseTransferOps
+	case analyzer.OpSend.String():
+		parseOps = parseSendOps
+	default:
+		return nil, ErrUnclearIntent
+	}
 
-	txArgs, match = parseSendOps(req.Operations)
-	if !match {
-		txArgs, match = parseTransferOps(req.Operations)
-		if !match {
-			return nil, ErrValidation
-		}
+	txArgs, rosettaErr := parseOps(req.Operations)
+	if rosettaErr != nil {
+		return nil, rosettaErr
 	}
 	options, err := airgap.MarshallToMap(txArgs)
 	if err != nil {

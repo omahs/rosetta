@@ -46,6 +46,7 @@ func NewRetriableErrorResponse(code int32, msg string) *types.Error {
 var (
 	ErrValidation    = NewErrorResponse(400, "Request body invalid")
 	ErrUnimplemented = NewErrorResponse(405, "Unimplemented rosetta endpoint")
+	ErrUnclearIntent = NewErrorResponse(406, "Operations provided are not valid")
 	ErrInternal      = NewErrorResponse(500, "Internal server error")
 	ErrCeloClient    = NewErrorResponse(502, "Celo node rpc request failed")
 )

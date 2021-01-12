@@ -42,8 +42,8 @@ func TestParseSendOps(t *testing.T) {
 
 	// Simple case that should pass
 	t.Run("Valid StableToken.transfer", func(t *testing.T) {
-		txArgs, match := parseSendOps(validSend)
-		Ω(match).Should(BeTrue())
+		txArgs, rosettaErr := parseSendOps(validSend)
+		Ω(rosettaErr).Should(BeNil())
 		Ω(*txArgs).Should(Equal(expectedTxArgs))
 	})
 
@@ -63,9 +63,9 @@ func TestParseSendOps(t *testing.T) {
 	for _, sample := range failSamples {
 		t.Run(sample.name, func(t *testing.T) {
 			RegisterTestingT(t)
-			txArgs, match := parseSendOps(sample.ops)
+			txArgs, rosettaErr := parseSendOps(sample.ops)
 			Ω(txArgs).Should(BeNil())
-			Ω(match).Should(BeFalse())
+			Ω(rosettaErr).ShouldNot(BeNil())
 		})
 	}
 }
@@ -108,8 +108,8 @@ func TestParseTransferOps(t *testing.T) {
 
 	// Simple case that should pass
 	t.Run("Valid CELO transfer", func(t *testing.T) {
-		txArgs, match := parseTransferOps(validTransfer)
-		Ω(match).Should(BeTrue())
+		txArgs, rosettaErr := parseTransferOps(validTransfer)
+		Ω(rosettaErr).Should(BeNil())
 		Ω(*txArgs).Should(Equal(expectedTxArgs))
 	})
 
@@ -136,9 +136,9 @@ func TestParseTransferOps(t *testing.T) {
 	for _, sample := range failSamples {
 		t.Run(sample.name, func(t *testing.T) {
 			RegisterTestingT(t)
-			txArgs, match := parseTransferOps(sample.ops)
+			txArgs, rosettaErr := parseTransferOps(sample.ops)
 			Ω(txArgs).Should(BeNil())
-			Ω(match).Should(BeFalse())
+			Ω(rosettaErr).ShouldNot(BeNil())
 		})
 	}
 }
