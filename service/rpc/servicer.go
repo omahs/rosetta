@@ -571,6 +571,66 @@ func (s *Servicer) ConstructionHash(
 	}, nil
 }
 
+func parseSendTx(tx airgap.Transaction) []*types.Operation {
+	// This is not currently symmetrical (i.e. not the same as inputted Ops in preprocess)
+	// which causes problems at the end of the ros workflow ("could not intent match" ops on chain)
+	// TODO revisit whether kliento makes it possible to go from address -> Contract and data -> method,args
+	metadata := map[string]interface{}{
+		"contract_address": tx.To.Hex(),
+		"data":             tx.Data,
+	}
+
+	ops := []*types.Operation{
+		{
+			Type: analyzer.OpSend.String(),
+			OperationIdentifier: &types.OperationIdentifier{
+				Index: 0,
+			},
+			Account: &types.AccountIdentifier{
+				Address: tx.From.Hex(),
+			},
+			Metadata: metadata,
+		},
+	}
+	return ops
+}
+
+func parseTransferTx(tx airgap.Transaction) []*types.Operation {
+	return []*types.Operation{
+		{
+			Type: analyzer.OpTransfer.String(),
+			OperationIdentifier: &types.OperationIdentifier{
+				Index: 0,
+			},
+			Account: &types.AccountIdentifier{
+				Address: tx.From.Hex(),
+			},
+			Amount: &types.Amount{
+				Value:    new(big.Int).Neg(tx.Value).String(),
+				Currency: CeloGold,
+			},
+		},
+		{
+			Type: analyzer.OpTransfer.String(),
+			OperationIdentifier: &types.OperationIdentifier{
+				Index: 1,
+			},
+			RelatedOperations: []*types.OperationIdentifier{
+				{
+					Index: 0,
+				},
+			},
+			Account: &types.AccountIdentifier{
+				Address: tx.To.Hex(),
+			},
+			Amount: &types.Amount{
+				Value:    tx.Value.String(),
+				Currency: CeloGold,
+			},
+		},
+	}
+}
+
 func (s *Servicer) ConstructionParse(
 	ctx context.Context,
 	req *types.ConstructionParseRequest,
@@ -614,39 +674,14 @@ func (s *Servicer) ConstructionParse(
 			Signature:  signature,
 		}
 	}
-
-	ops := []*types.Operation{
-		{
-			Type: "transfer",
-			OperationIdentifier: &types.OperationIdentifier{
-				Index: 0,
-			},
-			Account: &types.AccountIdentifier{
-				Address: tx.From.Hex(),
-			},
-			Amount: &types.Amount{
-				Value:    new(big.Int).Neg(tx.Value).String(),
-				Currency: CeloGold,
-			},
-		},
-		{
-			Type: "transfer",
-			OperationIdentifier: &types.OperationIdentifier{
-				Index: 1,
-			},
-			RelatedOperations: []*types.OperationIdentifier{
-				{
-					Index: 0,
-				},
-			},
-			Account: &types.AccountIdentifier{
-				Address: tx.To.Hex(),
-			},
-			Amount: &types.Amount{
-				Value:    tx.Value.String(),
-				Currency: CeloGold,
-			},
-		},
+	var ops []*types.Operation
+	switch {
+	case tx.Value != nil && len(tx.Value.Bits()) > 0:
+		// Native transfer
+		ops = parseTransferTx(tx)
+	default:
+		// Contract call
+		ops = parseSendTx(tx)
 	}
 
 	var resp *types.ConstructionParseResponse
@@ -668,24 +703,14 @@ func (s *Servicer) ConstructionPayloads(
 	ctx context.Context,
 	req *types.ConstructionPayloadsRequest,
 ) (*types.ConstructionPayloadsResponse, *types.Error) {
-	bz, err := json.Marshal(req.Metadata)
-	if err != nil {
-		return nil, ErrInternal
-	}
+
 	var metadata airgap.TxMetadata
-	err = metadata.UnmarshalJSON(bz)
+	err := airgap.UnmarshallFromMap(req.Metadata, &metadata)
 	if err != nil {
-		return nil, ErrInternal
+		return nil, ErrValidation
 	}
-
-	value := req.Operations[0].Amount.Value
-	valueInt, ok := new(big.Int).SetString(value, 10)
-	if !ok {
-		return nil, nil
-	}
-	valueInt.Abs(valueInt)
-	metadata.Value = valueInt
-
+	// TODO slim down "metadata" -> only fields needed for "live" options
+	// Then: move some of the parsing/transaction-building work from preprocess -> here
 	tx := airgap.Transaction{
 		TxMetadata: &metadata,
 		Signature:  []byte{},
@@ -825,7 +850,9 @@ func (s *Servicer) ConstructionPreprocess(
 	if len(req.Operations) < 1 {
 		return nil, ErrValidation
 	}
-	// Select proper parser based on first operation; more efficient than trying to parse every format
+	// TODO revisit this
+	// Select proper parser based on first operation;
+	// more efficient than trying to parse every format
 	var parseOps func(ops []*types.Operation) (*airgap.TxArgs, *types.Error)
 	switch req.Operations[0].Type {
 	case analyzer.OpTransfer.String():
