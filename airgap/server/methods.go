@@ -30,6 +30,7 @@ var abiFactoryMap = map[string]func() (*abi.ABI, error){
 	registry.LockedGoldContractID.String():  contracts.ParseLockedGoldABI,
 	airgap.ReleaseGold:                      contracts.ParseReleaseGoldABI,
 	registry.StableTokenContractID.String(): contracts.ParseStableTokenABI,
+	registry.ExchangeContractID.String():    contracts.ParseExchangeABI,
 }
 
 type argsPreProcessor func(ctx context.Context, srvCtx ServerContext, args []interface{}) ([]interface{}, error)

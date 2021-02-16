@@ -25,6 +25,7 @@ var contractsToGenerate = []string{
 	"Reserve",
 	"Accounts",
 	"ReleaseGold",
+	"Exchange",
 }
 
 func main() {

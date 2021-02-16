@@ -26,6 +26,7 @@ import (
 var serverCallEventDefinitions = []*airgap.CeloEvent{
 	airgap.EpochRewardsDistributedToVoters,
 	airgap.StableTokenTransferred,
+	airgap.Exchanged,
 }
 
 func hydrateEvents(srvCtx ServerContext, events []*airgap.CeloEvent) (map[*airgap.CeloEvent]airGapServerEvent, error) {

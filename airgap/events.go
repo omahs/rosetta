@@ -26,6 +26,8 @@ var (
 	EpochRewardsDistributedToVoters = registerEvent(registry.ElectionContractID.String(), "EpochRewardsDistributedToVoters", []topicParser{addressTopicParser})
 	// StableToken
 	StableTokenTransferred = registerEvent(registry.StableTokenContractID.String(), "Transfer", []topicParser{addressTopicParser, addressTopicParser})
+	// Exchange
+	Exchanged = registerEvent(registry.ExchangeContractID.String(), "Exchanged", []topicParser{addressTopicParser})
 )
 
 type CeloEvent struct {
