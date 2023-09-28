@@ -135,7 +135,7 @@ To run this for a different network, change the `geth.network` flag from `alfajo
 
 ## Airgap Client Guide
 
-The Celo Rosetta Airgap module is designed to facilitate signing transactions, parameterized by contemporaenous network metadata, in an offline context.
+The Celo Rosetta Airgap module is designed to facilitate signing transactions, parameterized by contemporaneous network metadata, in an offline context.
 
 Examples of this metadata include:
 
